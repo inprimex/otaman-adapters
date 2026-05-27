@@ -47,9 +47,9 @@ import shutil
 import re
 from pathlib import Path
 
+from .capabilities import AdapterCapabilities, DataClassification
 from .models import CompatibilityLevel, RegistrationResult, Skill
 from .openai_agents import (
-    OpenAIAgentsAdapter,
     _build_instructions,
     _render_skill_block,
     _write_outputs,
@@ -83,6 +83,19 @@ class GeminiCliAdapter:
     """
 
     runtime_id = _RUNTIME_ID_CLI
+
+    # Google Cloud / Gemini: no HIPAA BAA at standard API tier.
+    # Google Cloud Healthcare API (Vertex AI Medical Imaging, etc.) has BAA,
+    # but Gemini CLI itself does not offer a BAA-covered endpoint by default.
+    capabilities: AdapterCapabilities = AdapterCapabilities.for_levels(
+        DataClassification.INTERNAL,
+        DataClassification.SENSITIVE,
+        notes=(
+            "Default: Google Cloud Gemini API (no HIPAA BAA at standard tier). "
+            "INTERNAL + SENSITIVE cleared. PHI/REGULATED require Google Cloud "
+            "Healthcare-certified deployment (operator-configured, not default)."
+        ),
+    )
 
     def register(self, skills: list[Skill], target_dir: Path) -> list[RegistrationResult]:
         """Register active skills under target_dir/skills/<name>/SKILL.md."""
@@ -168,6 +181,17 @@ class GeminiApiAdapter:
     """
 
     runtime_id = _RUNTIME_ID_API
+
+    # Same compliance posture as GeminiCliAdapter — Google Cloud standard tier.
+    capabilities: AdapterCapabilities = AdapterCapabilities.for_levels(
+        DataClassification.INTERNAL,
+        DataClassification.SENSITIVE,
+        notes=(
+            "Default: google-generativeai SDK (no HIPAA BAA at standard tier). "
+            "INTERNAL + SENSITIVE cleared. PHI/REGULATED require Vertex AI on a "
+            "Google Cloud Healthcare-certified project (operator-configured)."
+        ),
+    )
 
     def register(
         self,

@@ -2,6 +2,7 @@ import re
 import shutil
 from pathlib import Path
 
+from .capabilities import AdapterCapabilities, DataClassification
 from .models import CompatibilityLevel, RegistrationResult, Skill
 
 # Claude Code discovers skills at <plugin-dir>/skills/<name>/SKILL.md.
@@ -17,6 +18,19 @@ _RUNTIME_ID = "claude-code"
 
 class ClaudeCodeAdapter:
     runtime_id = _RUNTIME_ID
+
+    # Compliance posture: Anthropic API (standard tier) does not offer a HIPAA
+    # BAA or PCI-DSS certification by default.  Data classified INTERNAL or
+    # SENSITIVE can be routed here.  PHI and REGULATED require an operator to
+    # configure a Bedrock-Anthropic endpoint with an AWS BAA — not the default.
+    capabilities: AdapterCapabilities = AdapterCapabilities.for_levels(
+        DataClassification.INTERNAL,
+        DataClassification.SENSITIVE,
+        notes=(
+            "Default: Anthropic API (no BAA).  INTERNAL + SENSITIVE cleared. "
+            "PHI/REGULATED require Bedrock-Anthropic with AWS BAA (EE, operator-configured)."
+        ),
+    )
 
     def register(self, skills: list[Skill], target_dir: Path) -> list[RegistrationResult]:
         """Register active skills under target_dir/skills/<name>/SKILL.md."""

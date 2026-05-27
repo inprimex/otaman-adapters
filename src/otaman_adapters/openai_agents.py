@@ -30,6 +30,7 @@ from pathlib import Path
 
 import yaml
 
+from .capabilities import AdapterCapabilities, DataClassification
 from .models import CompatibilityLevel, RegistrationResult, Skill
 
 _RUNTIME_ID = "openai-agents"
@@ -66,6 +67,25 @@ class OpenAIAgentsAdapter:
     """
 
     runtime_id = _RUNTIME_ID
+
+    # Compliance posture: OpenAI Agents SDK + Azure OpenAI with a Microsoft BAA
+    # covers PHI (HIPAA) and can be configured for REGULATED workloads (PCI-DSS
+    # via Azure's compliance certifications).  This is a CONFIGURABLE adapter —
+    # the default declaration reflects the broadest achievable posture when
+    # properly configured; operators must enable Azure OpenAI + BAA to exercise
+    # PHI/REGULATED clearance.  Plain OpenAI API (api.openai.com) only covers
+    # INTERNAL + SENSITIVE.
+    capabilities: AdapterCapabilities = AdapterCapabilities.for_levels(
+        DataClassification.INTERNAL,
+        DataClassification.SENSITIVE,
+        DataClassification.PHI,
+        DataClassification.REGULATED,
+        notes=(
+            "Configurable: Azure OpenAI + Microsoft BAA covers PHI + REGULATED. "
+            "Plain OpenAI API (api.openai.com) covers INTERNAL + SENSITIVE only. "
+            "Operator must configure Azure endpoint for PHI/REGULATED clearance."
+        ),
+    )
 
     def register(
         self,
