@@ -3,6 +3,7 @@ from .loader import load_skill
 from .adapter import SkillAdapter
 from .claude_code import ClaudeCodeAdapter
 from .openai_agents import OpenAIAgentsAdapter
+from .gemini import GeminiCliAdapter, GeminiApiAdapter
 
 __all__ = [
     "CompatibilityLevel",
@@ -12,4 +13,6 @@ __all__ = [
     "SkillAdapter",
     "ClaudeCodeAdapter",
     "OpenAIAgentsAdapter",
+    "GeminiCliAdapter",
+    "GeminiApiAdapter",
 ]
