@@ -1,0 +1,24 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "otaman-adapters"
+version = "0.1.0"
+description = "Otaman harness drivers: per-runtime skill registration adapters"
+requires-python = ">=3.10"
+dependencies = [
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/otaman_adapters"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

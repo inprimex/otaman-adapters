@@ -1,0 +1,10 @@
+# Otaman workspace marker (local pointer to otaman folder)
+.otaman
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
