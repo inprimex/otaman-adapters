@@ -27,6 +27,8 @@ Otaman folder: `../otaman-meta/` (contains `.agents/`, `platform.yaml`, bus mess
   - otaman-deploy (../otaman-deploy) — owned by **deploy-agent** (READ-ONLY)
   - otaman-license (../otaman-license) — owned by **license-agent** (READ-ONLY)
   - otaman-specs (../otaman-specs) — owned by **spec-agent** (READ-ONLY)
+  - otaman-strategy (../otaman-strategy) — owned by **cofounder-agent** (READ-ONLY)
+  - otaman-business (../otaman-business) — owned by **cpo-agent** (READ-ONLY)
 - You may read other repos' source code, configs, and CLAUDE.md to understand their APIs
 - If you need a change in another repo, send a `task-assignment` or `question` message to its owner
 
@@ -91,6 +93,13 @@ Why the split: bus checks happen dozens of times per session, and the MCP-via-in
 - After proposing, switch to other tasks. Run `/otaman:check` periodically to see if your proposal was approved
 - Resume the blocked task only after you see BOTH `spec-change-approved` AND `spec-change` messages
 - Check `../otaman-meta/.agents/blocked/adapters-agent.md` for your currently blocked tasks
+
+### Spec Authoring — NOT your job (CRITICAL)
+- **spec-agent authors ALL spec artifacts** — `proposal.md`, `design.md`, `tasks.md`, `specs/*/spec.md`, JSON schemas, ADRs. These live in `otaman-specs` which is READ-ONLY for you.
+- **Your only spec action is `/otaman:propose`** — you describe what you need, spec-agent writes it.
+- **After approval + spec-change notification**: wait for `task-assignment` messages addressed to you from the mapped `tasks.md`. Those tasks will be **implementation work in your repo**, not spec authoring.
+- **Never write**: `proposal.md`, `design.md`, `tasks.md`, `spec.md`, ADR files, or any file under `otaman-specs/openspec/`. Even after approval. Even if you think it would be faster.
+- If you feel the urge to "just fill in the spec myself" — stop, send a `question` message to spec-agent instead.
 
 
 
