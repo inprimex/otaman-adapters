@@ -434,6 +434,31 @@ class Easy8Adapter(PmSyncAdapter):  # type: ignore[misc]
 
         return WebhookRegistration(id=last_id, url=url, active=True)
 
+    def ensure_custom_field(self, name: str, field_format: str = "string") -> int:
+        """Create an IssueCustomField with *name* if it doesn't already exist.
+
+        Easy8 extension: POST /custom_fields.json?type=IssueCustomField.
+        Returns the field id (existing or newly created).
+        """
+        # Check if already exists
+        try:
+            resp = self._client.get("/custom_fields.json")
+            for cf in resp.get("custom_fields", []):
+                if cf.get("name") == name:
+                    return int(cf["id"])
+        except Exception:
+            pass
+
+        # Easy8 requires ?type=IssueCustomField — call _do_request directly
+        resp = self._client._do_request(
+            "POST",
+            "/custom_fields.json",
+            data={"custom_field": {"name": name, "field_format": field_format}},
+            params={"type": "IssueCustomField"},
+        )
+        cf = resp.get("custom_field", {})
+        return int(cf.get("id", 0))
+
     # ------------------------------------------------------------------
     # Inbound event handling
     # ------------------------------------------------------------------
