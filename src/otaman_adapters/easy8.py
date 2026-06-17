@@ -177,6 +177,7 @@ class Easy8Client:
         return {
             "X-Redmine-API-Key": self._api_key,
             "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0 (compatible; otaman/1.0)",
         }
 
     def _do_request(
