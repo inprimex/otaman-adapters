@@ -1,0 +1,561 @@
+"""Easy8 (Redmine-core) PM sync adapter for Otaman.
+
+Implements ``PmSyncAdapter`` against the Easy8 REST API at
+es.sunflowers.online.  All HTTP is done via the stdlib ``urllib.request``
+so no external dependencies are required.
+
+Capabilities were probed live on es.sunflowers.online (2026-06 audit).
+"""
+from __future__ import annotations
+
+import json
+import urllib.request
+import urllib.parse
+import urllib.error
+from typing import Any, Optional
+
+try:
+    from otaman_core.pm_sync import (
+        PmSyncAdapter,
+        PmAdapterCapabilities,
+        PmSyncConfig,
+        PmProject,
+        PmIssue,
+        PmIssueFilters,
+        PmStatus,
+        PmPriority,
+        PmInboundEvent,
+        WebhookRegistration,
+        SpecChange,
+        SpecState,
+        register_pm_adapter,
+    )
+except ImportError:
+    # otaman-core not yet installed in this environment
+    PmSyncAdapter = object
+    register_pm_adapter = lambda *a, **kw: None  # noqa: E731
+
+    # -----------------------------------------------------------------------
+    # Minimal stand-ins so the module is importable and testable without
+    # otaman-core installed.  These are replaced at runtime when the real
+    # package is present.
+    # -----------------------------------------------------------------------
+
+    from dataclasses import dataclass as _dc, field as _field
+
+    @_dc
+    class PmAdapterCapabilities:
+        issue_comments: bool = False
+        custom_fields: bool = False
+        custom_workflow: bool = False
+        webhook_inbound: bool = False
+        webhook_registration_api: bool = False
+        user_creation_api: bool = False
+        agent_identity_user: bool = False
+        agent_identity_group: bool = False
+        agent_identity_system_user: bool = False
+        mcp_support: bool = False
+        rest_api: bool = False
+        native_assignee_metrics: bool = False
+        project_hierarchy: bool = False
+        github_url_field: Optional[str] = None
+        project_custom_fields_api: bool = False
+
+    @_dc
+    class PmSyncConfig:
+        program_key: str = ""
+        program_name: str = ""
+
+    @_dc
+    class PmProject:
+        id: int = 0
+        name: str = ""
+        identifier: str = ""
+        parent_id: Optional[int] = None
+
+    @_dc
+    class PmIssue:
+        id: int = 0
+        subject: str = ""
+        project_id: int = 0
+        status: str = ""
+        priority: str = ""
+        assignee: Optional[str] = None
+        custom_fields: dict = _field(default_factory=dict)
+
+    @_dc
+    class PmIssueFilters:
+        project_id: Optional[int] = None
+        status_id: Optional[str] = None
+
+    @_dc
+    class PmStatus:
+        id: int = 0
+        name: str = ""
+
+    @_dc
+    class PmPriority:
+        id: int = 0
+        name: str = ""
+
+    @_dc
+    class PmInboundEvent:
+        event_type: str = ""
+        project_id: Optional[int] = None
+        issue_id: Optional[int] = None
+        payload: dict = _field(default_factory=dict)
+
+    @_dc
+    class WebhookRegistration:
+        id: int = 0
+        url: str = ""
+        events: list = _field(default_factory=list)
+
+    @_dc
+    class SpecChange:
+        title: str = ""
+        agent_name: str = ""
+        project_id: Optional[int] = None
+        jtbd_id: Optional[str] = None
+        spec_path: Optional[str] = None
+
+    class SpecState:
+        DECLARED = "declared"
+        IN_PROGRESS = "in_progress"
+        BLOCKED = "blocked"
+        DONE = "done"
+
+
+# ---------------------------------------------------------------------------
+# Capabilities (probed 2026-06, es.sunflowers.online)
+# ---------------------------------------------------------------------------
+
+EASY8_CAPABILITIES = PmAdapterCapabilities(
+    issue_comments=True,
+    custom_fields=True,
+    custom_workflow=True,
+    webhook_inbound=True,
+    webhook_registration_api=True,
+    user_creation_api=True,
+    agent_identity_user=True,
+    agent_identity_group=False,
+    agent_identity_system_user=True,
+    mcp_support=True,
+    rest_api=True,
+    native_assignee_metrics=True,
+    project_hierarchy=True,
+    github_url_field="homepage",
+    project_custom_fields_api=False,
+)
+
+
+# ---------------------------------------------------------------------------
+# HTTP client
+# ---------------------------------------------------------------------------
+
+class Easy8Error(Exception):
+    """Raised when the Easy8 API returns a non-2xx response."""
+
+    def __init__(self, status: int, body: str) -> None:
+        super().__init__(f"Easy8 HTTP {status}: {body}")
+        self.status = status
+        self.body = body
+
+
+class Easy8Client:
+    """Thin, dependency-free HTTP wrapper for the Easy8 / Redmine REST API."""
+
+    def __init__(self, base_url: str, api_key: str) -> None:
+        self._base_url = base_url.rstrip("/")
+        self._api_key = api_key
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _build_headers(self) -> dict[str, str]:
+        return {
+            "X-Redmine-API-Key": self._api_key,
+            "Content-Type": "application/json",
+        }
+
+    def _do_request(
+        self,
+        method: str,
+        path: str,
+        data: Optional[dict] = None,
+        params: Optional[dict] = None,
+    ) -> dict:
+        url = f"{self._base_url}{path}"
+        if params:
+            url = f"{url}?{urllib.parse.urlencode(params)}"
+
+        body_bytes: Optional[bytes] = None
+        if data is not None:
+            body_bytes = json.dumps(data).encode("utf-8")
+
+        req = urllib.request.Request(
+            url,
+            data=body_bytes,
+            headers=self._build_headers(),
+            method=method,
+        )
+
+        try:
+            with urllib.request.urlopen(req) as resp:
+                raw = resp.read()
+                if not raw:
+                    return {}
+                return json.loads(raw)
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode("utf-8", errors="replace")
+            raise Easy8Error(exc.code, body) from exc
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    def get(self, path: str, params: Optional[dict] = None) -> dict:
+        """GET *path* and return parsed JSON body."""
+        return self._do_request("GET", path, params=params)
+
+    def post(self, path: str, data: dict) -> dict:
+        """POST *data* as JSON to *path* and return parsed JSON body."""
+        return self._do_request("POST", path, data=data)
+
+    def put(self, path: str, data: dict) -> dict:
+        """PUT *data* as JSON to *path*; returns ``{}`` on 204 No Content."""
+        return self._do_request("PUT", path, data=data)
+
+
+# ---------------------------------------------------------------------------
+# Adapter
+# ---------------------------------------------------------------------------
+
+# Map Otaman SpecState values to Easy8/Redmine status names
+_STATE_TO_STATUS_NAME: dict[str, str] = {
+    "declared": "Declared",
+    "in_progress": "In-Progress",
+    "blocked": "Blocked",
+    "done": "Done",
+}
+
+
+class Easy8Adapter(PmSyncAdapter):  # type: ignore[misc]
+    """PmSyncAdapter implementation for Easy8 (Redmine-core)."""
+
+    def __init__(self, base_url: str, api_key: str) -> None:
+        self._client = Easy8Client(base_url, api_key)
+        # Maps program_key / identifier to project integer id
+        self._project_map: dict[str, int] = {}
+        # Cache: status name to id (populated lazily)
+        self._status_cache: dict[str, int] = {}
+
+    # ------------------------------------------------------------------
+    # Protocol: capabilities
+    # ------------------------------------------------------------------
+
+    @property
+    def capabilities(self) -> PmAdapterCapabilities:
+        return EASY8_CAPABILITIES
+
+    # ------------------------------------------------------------------
+    # Project management
+    # ------------------------------------------------------------------
+
+    def provision_project(self, config: Any) -> PmProject:
+        """Ensure a top-level project exists for *config.program_key*.
+
+        Returns the existing project if already present, otherwise creates it.
+        """
+        existing = self._find_project_by_identifier(config.program_key)
+        if existing is not None:
+            self._project_map[config.program_key] = existing.id
+            return existing
+
+        resp = self._client.post(
+            "/projects.json",
+            {
+                "project": {
+                    "name": config.program_name,
+                    "identifier": config.program_key,
+                }
+            },
+        )
+        project = _parse_project(resp["project"])
+        self._project_map[config.program_key] = project.id
+        return project
+
+    def create_subproject(
+        self,
+        name: str,
+        identifier: str,
+        parent_id: int,
+        github_url: str = "",
+    ) -> PmProject:
+        """Create a child project under *parent_id*.
+
+        Silently returns the existing project if *identifier* is already taken.
+        """
+        existing = self._find_project_by_identifier(identifier)
+        if existing is not None:
+            self._project_map[identifier] = existing.id
+            return existing
+
+        resp = self._client.post(
+            "/projects.json",
+            {
+                "project": {
+                    "name": name,
+                    "identifier": identifier,
+                    "parent_id": parent_id,
+                    "homepage": github_url,
+                    "description": (
+                        f"# Otaman metadata\nprogram-key: {identifier}"
+                    ),
+                }
+            },
+        )
+        project = _parse_project(resp["project"])
+        self._project_map[identifier] = project.id
+        return project
+
+    # ------------------------------------------------------------------
+    # Issue management
+    # ------------------------------------------------------------------
+
+    def create_issue(self, spec_change: Any) -> PmIssue:
+        """Create a Redmine issue from a *SpecChange*."""
+        subject = f"[{spec_change.agent_name}] {spec_change.title}"
+
+        payload: dict[str, Any] = {"subject": subject}
+
+        # Resolve project id
+        project_id = getattr(spec_change, "project_id", None)
+        if project_id is None and spec_change.agent_name in self._project_map:
+            project_id = self._project_map[spec_change.agent_name]
+        if project_id is not None:
+            payload["project_id"] = project_id
+
+        # Attach known custom fields (skip if field IDs not configured)
+        custom_fields = self._build_custom_fields(spec_change)
+        if custom_fields:
+            payload["custom_fields"] = custom_fields
+
+        resp = self._client.post("/issues.json", {"issue": payload})
+        return _parse_issue(resp["issue"])
+
+    def update_issue(self, issue_id: int, state: Any) -> PmIssue:
+        """Update the status of *issue_id* to match *state*."""
+        status_name = _STATE_TO_STATUS_NAME.get(
+            str(state).lower(),
+            str(state),
+        )
+        status_id = self._resolve_status_id(status_name)
+
+        self._client.put(
+            f"/issues/{issue_id}.json",
+            {"issue": {"status_id": status_id}},
+        )
+        # Fetch the updated issue to return current state
+        resp = self._client.get(f"/issues/{issue_id}.json")
+        return _parse_issue(resp["issue"])
+
+    def add_comment(self, issue_id: int, body: str) -> None:
+        """Append a journal note to *issue_id* via PUT (Redmine notes field)."""
+        self._client.put(
+            f"/issues/{issue_id}.json",
+            {"issue": {"notes": body}},
+        )
+
+    def list_issues(self, filters: Any) -> list:
+        """Return issues matching *filters*."""
+        params: dict[str, Any] = {}
+        project_id = getattr(filters, "project_id", None)
+        status_id = getattr(filters, "status_id", None)
+        if project_id is not None:
+            params["project_id"] = project_id
+        if status_id is not None:
+            params["status_id"] = status_id
+
+        resp = self._client.get("/issues.json", params=params or None)
+        return [_parse_issue(i) for i in resp.get("issues", [])]
+
+    # ------------------------------------------------------------------
+    # Webhook management
+    # ------------------------------------------------------------------
+
+    def register_webhook(self, url: str, events: list) -> WebhookRegistration:
+        """Register *url* for each event in *events* and activate each hook.
+
+        Easy8 uses ``/easy_web_hooks.json`` (underscore path).
+        For each event: POST to create, then PUT to set status=active.
+
+        Returns the WebhookRegistration for the last registered webhook.
+        """
+        last_id: int = 0
+        for event in events:
+            resp = self._client.post(
+                "/easy_web_hooks.json",
+                {
+                    "easy_web_hook": {
+                        "url": url,
+                        "entity_type": "issue",
+                        "action": str(event),
+                    }
+                },
+            )
+            hook_id: int = resp.get("easy_web_hook", {}).get("id", 0)
+            self._client.put(
+                f"/easy_web_hooks/{hook_id}.json",
+                {"easy_web_hook": {"status": "active"}},
+            )
+            last_id = hook_id
+
+        return WebhookRegistration(id=last_id, url=url, events=list(events))
+
+    # ------------------------------------------------------------------
+    # Inbound event handling
+    # ------------------------------------------------------------------
+
+    def handle_inbound_event(self, payload: dict) -> PmInboundEvent:
+        """Parse a raw Easy8 webhook payload into a *PmInboundEvent*."""
+        project_id: Optional[int] = None
+        issue_id: Optional[int] = None
+
+        # Redmine webhook payload shapes vary; try common keys
+        raw_project = payload.get("project") or {}
+        if isinstance(raw_project, dict):
+            project_id = raw_project.get("id")
+        elif isinstance(raw_project, int):
+            project_id = raw_project
+
+        raw_issue = payload.get("issue") or {}
+        if isinstance(raw_issue, dict):
+            issue_id = raw_issue.get("id")
+            if project_id is None:
+                nested = raw_issue.get("project") or {}
+                project_id = nested.get("id") if isinstance(nested, dict) else None
+
+        # Determine event type from action / object_kind
+        action = payload.get("action") or payload.get("object_kind") or "unknown"
+
+        return PmInboundEvent(
+            event_type=str(action),
+            project_id=project_id,
+            issue_id=issue_id,
+            payload=payload,
+        )
+
+    # ------------------------------------------------------------------
+    # Enumeration helpers
+    # ------------------------------------------------------------------
+
+    def list_statuses(self) -> list:
+        """Return all issue statuses defined in Easy8."""
+        resp = self._client.get("/issue_statuses.json")
+        return [
+            PmStatus(id=s["id"], name=s["name"])
+            for s in resp.get("issue_statuses", [])
+        ]
+
+    def list_priorities(self) -> list:
+        """Return all issue priorities defined in Easy8."""
+        resp = self._client.get("/enumerations/issue_priorities.json")
+        return [
+            PmPriority(id=p["id"], name=p["name"])
+            for p in resp.get("issue_priorities", [])
+        ]
+
+    # ------------------------------------------------------------------
+    # Project map (injected externally for multi-repo setups)
+    # ------------------------------------------------------------------
+
+    def set_project_map(self, project_map: dict[str, int]) -> None:
+        """Inject an externally-built ``{identifier: project_id}`` mapping."""
+        self._project_map.update(project_map)
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _find_project_by_identifier(self, identifier: str) -> Optional[PmProject]:
+        """Scan paginated project list for *identifier*; return None if absent."""
+        offset = 0
+        limit = 100
+        while True:
+            resp = self._client.get(
+                "/projects.json",
+                params={"offset": offset, "limit": limit},
+            )
+            projects = resp.get("projects", [])
+            for p in projects:
+                if p.get("identifier") == identifier:
+                    return _parse_project(p)
+            total_count = resp.get("total_count", 0)
+            offset += limit
+            if offset >= total_count or not projects:
+                break
+        return None
+
+    def _resolve_status_id(self, status_name: str) -> int:
+        """Return the integer id for *status_name*, fetching if not cached."""
+        if not self._status_cache:
+            for s in self.list_statuses():
+                self._status_cache[s.name] = s.id
+        return self._status_cache.get(status_name, 0)
+
+    def _build_custom_fields(self, spec_change: Any) -> list[dict]:
+        """Build custom_fields array for known field names (skip unknowns).
+
+        Field IDs are deployment-specific; we only attach if the spec_change
+        carries them explicitly.  Callers may sub-class and override.
+        """
+        # Without known integer field IDs we cannot attach custom fields safely.
+        # Intentionally left as a no-op skeleton for callers to extend once
+        # they know their Easy8 instance's custom-field ID scheme.
+        return []
+
+
+# ---------------------------------------------------------------------------
+# Parsing helpers
+# ---------------------------------------------------------------------------
+
+def _parse_project(data: dict) -> PmProject:
+    parent = data.get("parent")
+    parent_id = parent.get("id") if isinstance(parent, dict) else None
+    return PmProject(
+        id=data["id"],
+        name=data["name"],
+        identifier=data["identifier"],
+        parent_id=parent_id,
+    )
+
+
+def _parse_issue(data: dict) -> PmIssue:
+    status_obj = data.get("status") or {}
+    priority_obj = data.get("priority") or {}
+    assignee_obj = data.get("assigned_to") or {}
+    return PmIssue(
+        id=data["id"],
+        subject=data.get("subject", ""),
+        project_id=(data.get("project") or {}).get("id", 0),
+        status=status_obj.get("name", "") if isinstance(status_obj, dict) else "",
+        priority=priority_obj.get("name", "") if isinstance(priority_obj, dict) else "",
+        assignee=assignee_obj.get("name") if isinstance(assignee_obj, dict) else None,
+        custom_fields={
+            cf["name"]: cf.get("value")
+            for cf in data.get("custom_fields", [])
+            if isinstance(cf, dict)
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
+# Registration
+# ---------------------------------------------------------------------------
+
+try:
+    register_pm_adapter("easy8", Easy8Adapter)
+except Exception:
+    pass
