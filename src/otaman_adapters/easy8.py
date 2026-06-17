@@ -393,12 +393,26 @@ class Easy8Adapter(PmSyncAdapter):  # type: ignore[misc]
         """Register *url* for each event in *events* and activate each hook.
 
         Easy8 uses ``/easy_web_hooks.json`` (underscore path).
-        For each event: POST to create, then PUT to set status=active.
+        Idempotent: skips any event that already has an active hook for *url*.
+        For each new event: POST to create, then PUT to set status=active.
 
-        Returns the WebhookRegistration for the last registered webhook.
+        Returns the WebhookRegistration for the last registered (or found) webhook.
         """
+        # Fetch existing webhooks to avoid duplicates
+        existing_hooks: set[str] = set()
         last_id: int = 0
+        try:
+            resp = self._client.get("/easy_web_hooks.json")
+            for hook in resp.get("easy_web_hooks", []):
+                if hook.get("url") == url:
+                    existing_hooks.add(str(hook.get("action", "")))
+                    last_id = max(last_id, int(hook.get("id", 0)))
+        except Exception:
+            pass  # if listing fails, proceed and let create handle it
+
         for event in events:
+            if str(event) in existing_hooks:
+                continue  # already registered for this event + url
             resp = self._client.post(
                 "/easy_web_hooks.json",
                 {
