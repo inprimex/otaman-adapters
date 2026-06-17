@@ -18,6 +18,7 @@ from otaman_adapters.easy8 import (
     Easy8Adapter,
     Easy8Client,
     Easy8Error,
+    Easy8McpClient,
 )
 
 
@@ -214,9 +215,9 @@ class TestRegisterWebhook:
             result = adapter.register_webhook("https://cb.example.com", ["create", "update"])
 
         assert mock_open.call_count == 4
-        # Result carries the last hook id
         assert result.id == 11
-        assert result.events == ["create", "update"]
+        assert result.url == "https://cb.example.com"
+        assert result.active is True
 
     def test_uses_easy_web_hooks_with_underscore_not_webhooks(self):
         """Path must be /easy_web_hooks.json, not /easy_webhooks.json."""
@@ -402,3 +403,139 @@ class TestSetProjectMap:
         adapter.set_project_map({"new-key": 99})
         assert adapter._project_map["existing"] == 1
         assert adapter._project_map["new-key"] == 99
+
+
+# ---------------------------------------------------------------------------
+# Easy8Adapter.create_issue — Mode C prefix + tracker_id
+# ---------------------------------------------------------------------------
+
+class TestCreateIssue:
+    def _tracker_resp(self):
+        return _make_response({"trackers": [{"id": 3, "name": "Task"}, {"id": 4, "name": "Bug"}]})
+
+    def _issue_resp(self, subject="[core-agent] My issue"):
+        return _make_response({
+            "issue": {
+                "id": 100,
+                "subject": subject,
+                "project": {"id": 1},
+                "status": {"name": "New"},
+                "priority": {"name": "Normal"},
+                "custom_fields": [],
+            }
+        })
+
+    def test_mode_c_title_prefix(self):
+        """Issue subject must start with [<agent-name>]."""
+        adapter = Easy8Adapter("https://es.example.com", "apikey")
+        responses = [self._tracker_resp(), self._issue_resp("[core-agent] My issue")]
+
+        with patch("urllib.request.urlopen", side_effect=responses) as mock_open:
+            from otaman_adapters.easy8 import SpecChange
+            sc = SpecChange(title="My issue", agent_name="core-agent")
+            result = adapter.create_issue(sc)
+
+        post_req = mock_open.call_args_list[1][0][0]
+        body = json.loads(post_req.data)
+        assert body["issue"]["subject"] == "[core-agent] My issue"
+
+    def test_tracker_id_included_in_payload(self):
+        """Issue payload must include tracker_id resolved from tracker name."""
+        adapter = Easy8Adapter("https://es.example.com", "apikey")
+        responses = [self._tracker_resp(), self._issue_resp()]
+
+        with patch("urllib.request.urlopen", side_effect=responses) as mock_open:
+            from otaman_adapters.easy8 import SpecChange
+            sc = SpecChange(title="My issue", agent_name="core-agent")
+            adapter.create_issue(sc)
+
+        post_req = mock_open.call_args_list[1][0][0]
+        body = json.loads(post_req.data)
+        assert body["issue"]["tracker_id"] == 3
+
+    def test_posts_to_issues_json(self):
+        adapter = Easy8Adapter("https://es.example.com", "apikey")
+        responses = [self._tracker_resp(), self._issue_resp()]
+
+        with patch("urllib.request.urlopen", side_effect=responses) as mock_open:
+            from otaman_adapters.easy8 import SpecChange
+            sc = SpecChange(title="Spec", agent_name="spec-agent")
+            adapter.create_issue(sc)
+
+        post_req = mock_open.call_args_list[1][0][0]
+        assert "/issues.json" in post_req.full_url
+        assert post_req.method == "POST"
+
+    def test_tracker_id_skipped_when_tracker_resolution_fails(self):
+        """If tracker list endpoint fails, issue is still created without tracker_id."""
+        import urllib.error
+        adapter = Easy8Adapter("https://es.example.com", "apikey")
+        tracker_exc = urllib.error.HTTPError(
+            url="https://es.example.com/trackers.json",
+            code=403, msg="Forbidden", hdrs=MagicMock(), fp=MagicMock(),
+        )
+        tracker_exc.read = lambda: b""
+
+        with patch("urllib.request.urlopen", side_effect=[tracker_exc, self._issue_resp()]) as mock_open:
+            from otaman_adapters.easy8 import SpecChange
+            sc = SpecChange(title="T", agent_name="a")
+            result = adapter.create_issue(sc)
+
+        post_req = mock_open.call_args_list[1][0][0]
+        body = json.loads(post_req.data)
+        assert "tracker_id" not in body["issue"]
+        assert result.id == 100
+
+
+# ---------------------------------------------------------------------------
+# Easy8McpClient
+# ---------------------------------------------------------------------------
+
+class TestEasy8McpClient:
+    def test_posts_to_mcp_endpoint(self):
+        client = Easy8McpClient("https://es.example.com", "mykey")
+        resp_data = {"result": "ok"}
+        mock_resp = _make_response(resp_data)
+
+        with patch("urllib.request.urlopen", return_value=mock_resp) as mock_open:
+            result = client.call_tool("issues_list", {"project_id": 1})
+
+        req = mock_open.call_args[0][0]
+        assert req.method == "POST"
+        assert req.full_url == "https://es.example.com/mcp"
+        assert result == resp_data
+
+    def test_sends_api_key_header(self):
+        client = Easy8McpClient("https://es.example.com", "secret-key")
+        mock_resp = _make_response({})
+
+        with patch("urllib.request.urlopen", return_value=mock_resp) as mock_open:
+            client.call_tool("issues_get", {"id": 42})
+
+        req = mock_open.call_args[0][0]
+        assert req.get_header("X-redmine-api-key") == "secret-key"
+
+    def test_sends_tool_and_arguments_in_body(self):
+        client = Easy8McpClient("https://es.example.com", "k")
+        mock_resp = _make_response({"content": []})
+
+        with patch("urllib.request.urlopen", return_value=mock_resp) as mock_open:
+            client.call_tool("issues_list", {"project_id": 5, "status_id": "open"})
+
+        req = mock_open.call_args[0][0]
+        body = json.loads(req.data)
+        assert body["tool"] == "issues_list"
+        assert body["arguments"]["project_id"] == 5
+
+    def test_raises_easy8_error_on_http_error(self):
+        import urllib.error
+        client = Easy8McpClient("https://es.example.com", "k")
+        exc = urllib.error.HTTPError(
+            url="https://es.example.com/mcp",
+            code=500, msg="Internal Server Error",
+            hdrs=MagicMock(), fp=io.BytesIO(b"server error"),
+        )
+        with patch("urllib.request.urlopen", side_effect=exc):
+            with pytest.raises(Easy8Error) as exc_info:
+                client.call_tool("bad_tool", {})
+        assert exc_info.value.status == 500

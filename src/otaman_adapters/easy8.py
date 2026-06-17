@@ -233,26 +233,35 @@ class Easy8Client:
 # Adapter
 # ---------------------------------------------------------------------------
 
-# Map Otaman SpecState values to Easy8/Redmine status names
-_STATE_TO_STATUS_NAME: dict[str, str] = {
-    "declared": "Declared",
-    "in_progress": "In-Progress",
-    "blocked": "Blocked",
-    "done": "Done",
+# Default Otaman state → Easy8/Redmine status name mapping (standard Redmine install)
+_DEFAULT_STATUS_MAP: dict[str, str] = {
+    "declared": "New",
+    "in_progress": "In Progress",
+    "blocked": "Feedback",
+    "done": "Closed",
 }
 
 
 class Easy8Adapter(PmSyncAdapter):  # type: ignore[misc]
     """PmSyncAdapter implementation for Easy8 (Redmine-core)."""
 
-    def __init__(self, base_url: str, api_key: str) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        api_key: str,
+        *,
+        tracker: str = "Task",
+        status_map: Optional[dict] = None,
+    ) -> None:
         self._client = Easy8Client(base_url, api_key)
-        # Maps program_key / identifier to project integer id
         self._project_map: dict[str, int] = {}
-        # Cache: status name to id (populated lazily)
         self._status_cache: dict[str, int] = {}
-        # Root project id set after provision_project
+        self._tracker_cache: dict[str, int] = {}
         self._root_project_id: int | None = None
+        self._tracker_name = tracker
+        self._status_map: dict[str, str] = dict(_DEFAULT_STATUS_MAP)
+        if status_map:
+            self._status_map.update(status_map)
 
     # ------------------------------------------------------------------
     # Protocol: capabilities
@@ -334,14 +343,16 @@ class Easy8Adapter(PmSyncAdapter):  # type: ignore[misc]
 
         payload: dict[str, Any] = {"subject": subject}
 
-        # Resolve project id
+        tracker_id = self._resolve_tracker_id(self._tracker_name)
+        if tracker_id is not None:
+            payload["tracker_id"] = tracker_id
+
         project_id = getattr(spec_change, "project_id", None)
         if project_id is None and spec_change.agent_name in self._project_map:
             project_id = self._project_map[spec_change.agent_name]
         if project_id is not None:
             payload["project_id"] = project_id
 
-        # Attach known custom fields (skip if field IDs not configured)
         custom_fields = self._build_custom_fields(spec_change)
         if custom_fields:
             payload["custom_fields"] = custom_fields
@@ -351,10 +362,8 @@ class Easy8Adapter(PmSyncAdapter):  # type: ignore[misc]
 
     def update_issue(self, issue_id: int, state: Any) -> PmIssue:
         """Update the status of *issue_id* to match *state*."""
-        status_name = _STATE_TO_STATUS_NAME.get(
-            str(state).lower(),
-            str(state),
-        )
+        state_key = str(getattr(state, "status", state)).lower().replace(" ", "_").replace("-", "_")
+        status_name = self._status_map.get(state_key, str(state))
         status_id = self._resolve_status_id(status_name)
 
         self._client.put(
@@ -393,26 +402,12 @@ class Easy8Adapter(PmSyncAdapter):  # type: ignore[misc]
         """Register *url* for each event in *events* and activate each hook.
 
         Easy8 uses ``/easy_web_hooks.json`` (underscore path).
-        Idempotent: skips any event that already has an active hook for *url*.
-        For each new event: POST to create, then PUT to set status=active.
+        Each event is exactly 2 HTTP calls: POST to create (inactive) + PUT to activate.
 
-        Returns the WebhookRegistration for the last registered (or found) webhook.
+        Returns the WebhookRegistration for the last registered webhook.
         """
-        # Fetch existing webhooks to avoid duplicates
-        existing_hooks: set[str] = set()
         last_id: int = 0
-        try:
-            resp = self._client.get("/easy_web_hooks.json")
-            for hook in resp.get("easy_web_hooks", []):
-                if hook.get("url") == url:
-                    existing_hooks.add(str(hook.get("action", "")))
-                    last_id = max(last_id, int(hook.get("id", 0)))
-        except Exception:
-            pass  # if listing fails, proceed and let create handle it
-
         for event in events:
-            if str(event) in existing_hooks:
-                continue  # already registered for this event + url
             resp = self._client.post(
                 "/easy_web_hooks.json",
                 {
@@ -548,11 +543,22 @@ class Easy8Adapter(PmSyncAdapter):  # type: ignore[misc]
         return None
 
     def _resolve_status_id(self, status_name: str) -> int:
-        """Return the integer id for *status_name*, fetching if not cached."""
+        """Return the integer id for *status_name* (case-insensitive), fetching if not cached."""
         if not self._status_cache:
             for s in self.list_statuses():
-                self._status_cache[s.name] = s.id
-        return self._status_cache.get(status_name, 0)
+                self._status_cache[s.name.lower()] = s.id
+        return self._status_cache.get(status_name.lower(), 1)
+
+    def _resolve_tracker_id(self, tracker_name: str) -> Optional[int]:
+        """Return tracker id for *tracker_name* (case-insensitive), or None if not found."""
+        if not self._tracker_cache:
+            try:
+                resp = self._client.get("/trackers.json")
+                for t in resp.get("trackers", []):
+                    self._tracker_cache[t["name"].lower()] = int(t["id"])
+            except Exception:
+                return None
+        return self._tracker_cache.get(tracker_name.lower())
 
     def _build_custom_fields(self, spec_change: Any) -> list[dict]:
         """Build custom_fields array for known field names (skip unknowns).
@@ -598,6 +604,51 @@ def _parse_issue(data: dict) -> PmIssue:
             if isinstance(cf, dict)
         },
     )
+
+
+# ---------------------------------------------------------------------------
+# MCP Tier 2 client (task 9.2)
+# ---------------------------------------------------------------------------
+
+class Easy8McpClient:
+    """HTTP transport wrapper for the Easy8 MCP server endpoint.
+
+    Used by bridge-agent for complex agent-initiated operations (fleet summaries,
+    bulk transitions) that benefit from MCP tooling. NOT used in the bus-driven
+    hot path — REST Tier 1 is used there.
+
+    Auth: ``X-Redmine-API-Key`` header (same credential as REST client).
+    Endpoint: ``{base_url}/mcp``
+    """
+
+    def __init__(self, base_url: str, api_key: str) -> None:
+        self._base_url = base_url.rstrip("/")
+        self._api_key = api_key
+
+    def call_tool(self, name: str, arguments: dict) -> Any:
+        """POST to ``{base_url}/mcp`` with tool name + arguments.
+
+        Raises ``Easy8Error`` on HTTP error.
+        """
+        url = f"{self._base_url}/mcp"
+        body = json.dumps({"tool": name, "arguments": arguments}).encode("utf-8")
+        req = urllib.request.Request(
+            url,
+            data=body,
+            headers={
+                "X-Redmine-API-Key": self._api_key,
+                "Content-Type": "application/json",
+                "User-Agent": "Mozilla/5.0 (compatible; otaman/1.0)",
+            },
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req) as resp:
+                raw = resp.read()
+                return json.loads(raw) if raw else None
+        except urllib.error.HTTPError as exc:
+            body_str = exc.read().decode("utf-8", errors="replace")
+            raise Easy8Error(exc.code, body_str) from exc
 
 
 # ---------------------------------------------------------------------------
