@@ -233,26 +233,32 @@ class Easy8Client:
 # Adapter
 # ---------------------------------------------------------------------------
 
-# Map Otaman SpecState values to Easy8/Redmine status names
-_STATE_TO_STATUS_NAME: dict[str, str] = {
-    "declared": "Declared",
-    "in_progress": "In-Progress",
-    "blocked": "Blocked",
-    "done": "Done",
-}
-
-
 class Easy8Adapter(PmSyncAdapter):  # type: ignore[misc]
     """PmSyncAdapter implementation for Easy8 (Redmine-core)."""
 
-    def __init__(self, base_url: str, api_key: str) -> None:
-        self._client = Easy8Client(base_url, api_key)
-        # Maps program_key / identifier to project integer id
+    def __init__(
+        self,
+        base_url: str,
+        api_key: str,
+        status_map: Optional[dict] = None,
+        tracker: str = "Task",
+    ) -> None:
+        self._client = Easy8Client(base_url=base_url, api_key=api_key)
         self._project_map: dict[str, int] = {}
-        # Cache: status name to id (populated lazily)
         self._status_cache: dict[str, int] = {}
-        # Root project id set after provision_project
         self._root_project_id: int | None = None
+        self._tracker_cache: dict[str, int] = {}
+        # Status map: Otaman internal state → PM status name
+        # Defaults cover a standard Redmine install; operator can override via platform.yaml
+        self._status_map: dict[str, str] = {
+            "declared": "New",
+            "in_progress": "In Progress",
+            "blocked": "Feedback",
+            "done": "Closed",
+        }
+        if status_map:
+            self._status_map.update(status_map)
+        self._tracker_name: str = tracker
 
     # ------------------------------------------------------------------
     # Protocol: capabilities
@@ -333,6 +339,9 @@ class Easy8Adapter(PmSyncAdapter):  # type: ignore[misc]
         subject = f"[{spec_change.agent_name}] {spec_change.title}"
 
         payload: dict[str, Any] = {"subject": subject}
+        tracker_id = self._resolve_tracker_id(self._tracker_name)
+        if tracker_id is not None:
+            payload["tracker_id"] = tracker_id
 
         # Resolve project id
         project_id = getattr(spec_change, "project_id", None)
@@ -351,10 +360,8 @@ class Easy8Adapter(PmSyncAdapter):  # type: ignore[misc]
 
     def update_issue(self, issue_id: int, state: Any) -> PmIssue:
         """Update the status of *issue_id* to match *state*."""
-        status_name = _STATE_TO_STATUS_NAME.get(
-            str(state).lower(),
-            str(state),
-        )
+        state_key = str(getattr(state, "status", state)).lower().replace(" ", "_").replace("-", "_")
+        status_name = self._status_map.get(state_key, str(state))
         status_id = self._resolve_status_id(status_name)
 
         self._client.put(
@@ -548,11 +555,22 @@ class Easy8Adapter(PmSyncAdapter):  # type: ignore[misc]
         return None
 
     def _resolve_status_id(self, status_name: str) -> int:
-        """Return the integer id for *status_name*, fetching if not cached."""
+        """Return the integer id for *status_name* (case-insensitive), fetching if not cached."""
         if not self._status_cache:
             for s in self.list_statuses():
-                self._status_cache[s.name] = s.id
-        return self._status_cache.get(status_name, 0)
+                self._status_cache[s.name.lower()] = s.id
+        return self._status_cache.get(status_name.lower(), 1)
+
+    def _resolve_tracker_id(self, tracker_name: str) -> Optional[int]:
+        """Return tracker id for *tracker_name* (case-insensitive), or None if not found."""
+        if not self._tracker_cache:
+            try:
+                resp = self._client.get("/trackers.json")
+                for t in resp.get("trackers", []):
+                    self._tracker_cache[t["name"].lower()] = int(t["id"])
+            except Exception:
+                return None
+        return self._tracker_cache.get(tracker_name.lower())
 
     def _build_custom_fields(self, spec_change: Any) -> list[dict]:
         """Build custom_fields array for known field names (skip unknowns).
