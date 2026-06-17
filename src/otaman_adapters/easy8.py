@@ -271,7 +271,7 @@ class Easy8Adapter(PmSyncAdapter):  # type: ignore[misc]
 
         Returns the existing project if already present, otherwise creates it.
         """
-        existing = self._find_project_by_identifier(config.program_key)
+        existing = self._find_project_by_name(config.program_name)
         if existing is not None:
             self._project_map[config.program_key] = existing.id
             return existing
@@ -301,7 +301,7 @@ class Easy8Adapter(PmSyncAdapter):  # type: ignore[misc]
 
         Silently returns the existing project if *identifier* is already taken.
         """
-        existing = self._find_project_by_identifier(identifier)
+        existing = self._find_project_by_name(name)
         if existing is not None:
             self._project_map[identifier] = existing.id
             return existing
@@ -485,8 +485,12 @@ class Easy8Adapter(PmSyncAdapter):  # type: ignore[misc]
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _find_project_by_identifier(self, identifier: str) -> Optional[PmProject]:
-        """Scan paginated project list for *identifier*; return None if absent."""
+    def _find_project_by_name(self, name: str) -> Optional[PmProject]:
+        """Scan paginated project list for a project with *name*; return None if absent.
+
+        Easy8 ignores the ``identifier`` field in POST /projects.json and assigns
+        the numeric project id as identifier, so lookup must use the name field.
+        """
         offset = 0
         limit = 100
         while True:
@@ -496,7 +500,7 @@ class Easy8Adapter(PmSyncAdapter):  # type: ignore[misc]
             )
             projects = resp.get("projects", [])
             for p in projects:
-                if p.get("identifier") == identifier:
+                if p.get("name") == name:
                     return _parse_project(p)
             total_count = resp.get("total_count", 0)
             offset += limit
