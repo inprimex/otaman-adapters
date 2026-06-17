@@ -342,7 +342,6 @@ class Easy8Adapter(PmSyncAdapter):  # type: ignore[misc]
         subject = f"[{spec_change.agent_name}] {spec_change.title}"
 
         payload: dict[str, Any] = {"subject": subject}
-
         tracker_id = self._resolve_tracker_id(self._tracker_name)
         if tracker_id is not None:
             payload["tracker_id"] = tracker_id
