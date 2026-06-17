@@ -109,7 +109,7 @@ except ImportError:
     class WebhookRegistration:
         id: int = 0
         url: str = ""
-        events: list = _field(default_factory=list)
+        active: bool = False
 
     @_dc
     class SpecChange:
@@ -251,6 +251,8 @@ class Easy8Adapter(PmSyncAdapter):  # type: ignore[misc]
         self._project_map: dict[str, int] = {}
         # Cache: status name to id (populated lazily)
         self._status_cache: dict[str, int] = {}
+        # Root project id set after provision_project
+        self._root_project_id: int | None = None
 
     # ------------------------------------------------------------------
     # Protocol: capabilities
@@ -285,6 +287,7 @@ class Easy8Adapter(PmSyncAdapter):  # type: ignore[misc]
         )
         project = _parse_project(resp["project"])
         self._project_map[config.program_key] = project.id
+        self._root_project_id = project.id
         return project
 
     def create_subproject(
@@ -401,8 +404,10 @@ class Easy8Adapter(PmSyncAdapter):  # type: ignore[misc]
                 {
                     "easy_web_hook": {
                         "url": url,
-                        "entity_type": "issue",
+                        "name": f"otaman-issue-{event}",
+                        "entity_type": "Issue",
                         "action": str(event),
+                        **({"project_id": self._root_project_id} if self._root_project_id else {}),
                     }
                 },
             )
@@ -413,7 +418,7 @@ class Easy8Adapter(PmSyncAdapter):  # type: ignore[misc]
             )
             last_id = hook_id
 
-        return WebhookRegistration(id=last_id, url=url, events=list(events))
+        return WebhookRegistration(id=last_id, url=url, active=True)
 
     # ------------------------------------------------------------------
     # Inbound event handling
