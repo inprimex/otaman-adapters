@@ -257,6 +257,7 @@ class Easy8Adapter(PmSyncAdapter):  # type: ignore[misc]
         self._project_map: dict[str, int] = {}
         self._status_cache: dict[str, int] = {}
         self._tracker_cache: dict[str, int] = {}
+        self._priority_cache: dict[str, int] = {}
         self._root_project_id: int | None = None
         self._tracker_name = tracker
         self._status_map: dict[str, str] = dict(_DEFAULT_STATUS_MAP)
@@ -345,6 +346,10 @@ class Easy8Adapter(PmSyncAdapter):  # type: ignore[misc]
         tracker_id = self._resolve_tracker_id(self._tracker_name)
         if tracker_id is not None:
             payload["tracker_id"] = tracker_id
+
+        priority_id = self._resolve_priority_id("normal")
+        if priority_id is not None:
+            payload["priority_id"] = priority_id
 
         project_id = getattr(spec_change, "project_id", None)
         if project_id is None and spec_change.agent_name in self._project_map:
@@ -569,6 +574,17 @@ class Easy8Adapter(PmSyncAdapter):  # type: ignore[misc]
                 return None
         return self._tracker_cache.get(tracker_name.lower())
 
+    def _resolve_priority_id(self, priority_name: str) -> Optional[int]:
+        """Return priority id for *priority_name* (case-insensitive), or None if not found."""
+        if not self._priority_cache:
+            try:
+                resp = self._client.get("/enumerations/issue_priorities.json")
+                for p in resp.get("issue_priorities", []):
+                    self._priority_cache[p["name"].lower()] = int(p["id"])
+            except Exception:
+                return None
+        return self._priority_cache.get(priority_name.lower())
+
     def _build_custom_fields(self, spec_change: Any) -> list[dict]:
         """Build custom_fields array for known field names (skip unknowns).
 
@@ -598,20 +614,37 @@ def _parse_project(data: dict) -> PmProject:
 
 def _parse_issue(data: dict) -> PmIssue:
     status_obj = data.get("status") or {}
+    status_name = status_obj.get("name", "") if isinstance(status_obj, dict) else ""
+    project_id = (data.get("project") or {}).get("id", 0)
+    cf_map = {
+        cf["name"]: cf.get("value")
+        for cf in data.get("custom_fields", [])
+        if isinstance(cf, dict)
+    }
+    # Try core PmIssue fields first (id, project_id, subject, status, agent_name, spec_path, jtbd_id)
+    try:
+        return PmIssue(
+            id=data["id"],
+            project_id=project_id,
+            subject=data.get("subject", ""),
+            status=status_name,
+            agent_name=cf_map.get("otaman-agent"),
+            spec_path=cf_map.get("spec-path"),
+            jtbd_id=cf_map.get("jtbd-id"),
+        )
+    except TypeError:
+        pass
+    # Fallback: local stub PmIssue (id, subject, project_id, status, priority, assignee, custom_fields)
     priority_obj = data.get("priority") or {}
     assignee_obj = data.get("assigned_to") or {}
     return PmIssue(
         id=data["id"],
         subject=data.get("subject", ""),
-        project_id=(data.get("project") or {}).get("id", 0),
-        status=status_obj.get("name", "") if isinstance(status_obj, dict) else "",
+        project_id=project_id,
+        status=status_name,
         priority=priority_obj.get("name", "") if isinstance(priority_obj, dict) else "",
         assignee=assignee_obj.get("name") if isinstance(assignee_obj, dict) else None,
-        custom_fields={
-            cf["name"]: cf.get("value")
-            for cf in data.get("custom_fields", [])
-            if isinstance(cf, dict)
-        },
+        custom_fields=cf_map,
     )
 
 
