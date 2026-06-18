@@ -506,6 +506,16 @@ class Easy8Adapter(PmSyncAdapter):  # type: ignore[misc]
             for p in resp.get("issue_priorities", [])
         ]
 
+    def get_users(self) -> list[dict]:
+        """Return all users from Easy8 as raw dicts.
+
+        Each dict contains at least ``id`` (int), ``name`` (str), and
+        ``mail`` (str, Redmine's email field key).
+        Raises ``Easy8Error`` on HTTP failure.
+        """
+        resp = self._client.get("/users.json")
+        return resp.get("users", [])
+
     # ------------------------------------------------------------------
     # Project map (injected externally for multi-repo setups)
     # ------------------------------------------------------------------
@@ -603,6 +613,59 @@ def _parse_issue(data: dict) -> PmIssue:
             if isinstance(cf, dict)
         },
     )
+
+
+# ---------------------------------------------------------------------------
+# Human roster helpers (task 4.3)
+# ---------------------------------------------------------------------------
+
+from dataclasses import dataclass as _roster_dc
+
+
+@_roster_dc
+class HumanRosterEntry:
+    """Minimal representation of a platform.yaml human-roster entry.
+
+    Mirrors the fields from the human-roster spec. ``pm_user_id`` is None
+    until resolved by ``resolve_pm_user_id()``.
+    """
+
+    name: str
+    email: str
+    roles: list
+    pm_user_id: Optional[int] = None
+
+
+def resolve_pm_user_id(
+    adapter: "Easy8Adapter",
+    roster_entry: HumanRosterEntry,
+) -> Optional[int]:
+    """Resolve the PM user id for *roster_entry* against Easy8's user list.
+
+    Matching strategy (in order):
+    1. Exact ``email`` match against the ``mail`` field.
+    2. Case-insensitive ``name`` match against the ``name`` field.
+
+    Returns the integer user id on the first match, or ``None`` if no user
+    matches. Never raises — caller decides what to do on no-match.
+    """
+    try:
+        users = adapter.get_users()
+    except Exception:
+        return None
+
+    email_lower = roster_entry.email.lower()
+    name_lower = roster_entry.name.lower()
+
+    name_match: Optional[int] = None
+    for user in users:
+        # Redmine stores email under "mail" key
+        if user.get("mail", "").lower() == email_lower:
+            return int(user["id"])
+        if name_match is None and user.get("name", "").lower() == name_lower:
+            name_match = int(user["id"])
+
+    return name_match
 
 
 # ---------------------------------------------------------------------------
