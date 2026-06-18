@@ -5,7 +5,7 @@ from .adapter import SkillAdapter
 from .claude_code import ClaudeCodeAdapter
 from .openai_agents import OpenAIAgentsAdapter
 from .gemini import GeminiCliAdapter, GeminiApiAdapter
-from .easy8 import Easy8Adapter, Easy8McpClient, EASY8_CAPABILITIES
+from .easy8 import Easy8Adapter, Easy8McpClient, EASY8_CAPABILITIES, HumanRosterEntry, resolve_pm_user_id
 
 __all__ = [
     "AdapterCapabilities",
@@ -22,4 +22,6 @@ __all__ = [
     "Easy8Adapter",
     "Easy8McpClient",
     "EASY8_CAPABILITIES",
+    "HumanRosterEntry",
+    "resolve_pm_user_id",
 ]

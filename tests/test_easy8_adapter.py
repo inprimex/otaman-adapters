@@ -19,6 +19,8 @@ from otaman_adapters.easy8 import (
     Easy8Client,
     Easy8Error,
     Easy8McpClient,
+    HumanRosterEntry,
+    resolve_pm_user_id,
 )
 
 
@@ -539,3 +541,112 @@ class TestEasy8McpClient:
             with pytest.raises(Easy8Error) as exc_info:
                 client.call_tool("bad_tool", {})
         assert exc_info.value.status == 500
+
+
+# ---------------------------------------------------------------------------
+# Easy8Adapter.get_users
+# ---------------------------------------------------------------------------
+
+class TestGetUsers:
+    def test_returns_users_list(self):
+        adapter = Easy8Adapter("https://es.example.com", "apikey")
+        resp_data = {
+            "users": [
+                {"id": 1, "name": "Roman Starikov", "mail": "starikov@inprimex.com"},
+                {"id": 2, "name": "Alice", "mail": "alice@example.com"},
+            ]
+        }
+        with patch("urllib.request.urlopen", return_value=_make_response(resp_data)):
+            users = adapter.get_users()
+
+        assert len(users) == 2
+        assert users[0]["id"] == 1
+        assert users[0]["mail"] == "starikov@inprimex.com"
+
+    def test_returns_empty_list_when_no_users(self):
+        adapter = Easy8Adapter("https://es.example.com", "apikey")
+        with patch("urllib.request.urlopen", return_value=_make_response({"users": []})):
+            assert adapter.get_users() == []
+
+    def test_raises_easy8_error_on_http_failure(self):
+        import urllib.error
+        adapter = Easy8Adapter("https://es.example.com", "apikey")
+        exc = urllib.error.HTTPError(
+            url="https://es.example.com/users.json",
+            code=403, msg="Forbidden", hdrs=MagicMock(), fp=io.BytesIO(b"forbidden"),
+        )
+        with patch("urllib.request.urlopen", side_effect=exc):
+            with pytest.raises(Easy8Error):
+                adapter.get_users()
+
+    def test_calls_users_json_endpoint(self):
+        adapter = Easy8Adapter("https://es.example.com", "apikey")
+        with patch("urllib.request.urlopen", return_value=_make_response({"users": []})) as mock_open:
+            adapter.get_users()
+        req = mock_open.call_args[0][0]
+        assert "/users.json" in req.full_url
+        assert req.method == "GET"
+
+
+# ---------------------------------------------------------------------------
+# resolve_pm_user_id
+# ---------------------------------------------------------------------------
+
+class TestResolvePmUserId:
+    _users = [
+        {"id": 1, "name": "Roman Starikov", "mail": "starikov@inprimex.com"},
+        {"id": 2, "name": "Alice Smith", "mail": "alice@example.com"},
+        {"id": 3, "name": "Bob Jones", "mail": "bob@example.com"},
+    ]
+
+    def _adapter_with_users(self, users=None):
+        adapter = Easy8Adapter("https://es.example.com", "apikey")
+        data = users if users is not None else self._users
+        adapter.get_users = lambda: data
+        return adapter
+
+    def test_resolves_by_email_exact_match(self):
+        adapter = self._adapter_with_users()
+        entry = HumanRosterEntry(name="R", email="alice@example.com", roles=["developer"])
+        assert resolve_pm_user_id(adapter, entry) == 2
+
+    def test_email_match_is_case_insensitive(self):
+        adapter = self._adapter_with_users()
+        entry = HumanRosterEntry(name="R", email="ALICE@EXAMPLE.COM", roles=["developer"])
+        assert resolve_pm_user_id(adapter, entry) == 2
+
+    def test_email_takes_priority_over_name(self):
+        """When email matches user 2 but name matches user 1, email wins."""
+        adapter = self._adapter_with_users()
+        entry = HumanRosterEntry(
+            name="Roman Starikov",   # matches user 1 by name
+            email="alice@example.com",  # matches user 2 by email
+            roles=["cofounder"],
+        )
+        assert resolve_pm_user_id(adapter, entry) == 2
+
+    def test_falls_back_to_name_when_email_not_found(self):
+        adapter = self._adapter_with_users()
+        entry = HumanRosterEntry(name="Bob Jones", email="unknown@example.com", roles=["developer"])
+        assert resolve_pm_user_id(adapter, entry) == 3
+
+    def test_name_match_is_case_insensitive(self):
+        adapter = self._adapter_with_users()
+        entry = HumanRosterEntry(name="bob jones", email="no@match.com", roles=["developer"])
+        assert resolve_pm_user_id(adapter, entry) == 3
+
+    def test_returns_none_when_no_match(self):
+        adapter = self._adapter_with_users()
+        entry = HumanRosterEntry(name="Nobody", email="nobody@example.com", roles=["developer"])
+        assert resolve_pm_user_id(adapter, entry) is None
+
+    def test_returns_none_on_get_users_error(self):
+        adapter = Easy8Adapter("https://es.example.com", "apikey")
+        adapter.get_users = lambda: (_ for _ in ()).throw(Easy8Error(500, "server error"))
+        entry = HumanRosterEntry(name="Roman", email="starikov@inprimex.com", roles=["cofounder"])
+        assert resolve_pm_user_id(adapter, entry) is None
+
+    def test_returns_none_for_empty_user_list(self):
+        adapter = self._adapter_with_users(users=[])
+        entry = HumanRosterEntry(name="Roman", email="starikov@inprimex.com", roles=["cofounder"])
+        assert resolve_pm_user_id(adapter, entry) is None
