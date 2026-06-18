@@ -415,6 +415,9 @@ class TestCreateIssue:
     def _tracker_resp(self):
         return _make_response({"trackers": [{"id": 3, "name": "Task"}, {"id": 4, "name": "Bug"}]})
 
+    def _priority_resp(self):
+        return _make_response({"issue_priorities": [{"id": 2, "name": "Normal"}, {"id": 3, "name": "High"}]})
+
     def _issue_resp(self, subject="[core-agent] My issue"):
         return _make_response({
             "issue": {
@@ -430,41 +433,55 @@ class TestCreateIssue:
     def test_mode_c_title_prefix(self):
         """Issue subject must start with [<agent-name>]."""
         adapter = Easy8Adapter("https://es.example.com", "apikey")
-        responses = [self._tracker_resp(), self._issue_resp("[core-agent] My issue")]
+        responses = [self._tracker_resp(), self._priority_resp(), self._issue_resp("[core-agent] My issue")]
 
         with patch("urllib.request.urlopen", side_effect=responses) as mock_open:
             from otaman_adapters.easy8 import SpecChange
             sc = SpecChange(title="My issue", agent_name="core-agent")
             result = adapter.create_issue(sc)
 
-        post_req = mock_open.call_args_list[1][0][0]
+        post_req = mock_open.call_args_list[2][0][0]
         body = json.loads(post_req.data)
         assert body["issue"]["subject"] == "[core-agent] My issue"
 
     def test_tracker_id_included_in_payload(self):
         """Issue payload must include tracker_id resolved from tracker name."""
         adapter = Easy8Adapter("https://es.example.com", "apikey")
-        responses = [self._tracker_resp(), self._issue_resp()]
+        responses = [self._tracker_resp(), self._priority_resp(), self._issue_resp()]
 
         with patch("urllib.request.urlopen", side_effect=responses) as mock_open:
             from otaman_adapters.easy8 import SpecChange
             sc = SpecChange(title="My issue", agent_name="core-agent")
             adapter.create_issue(sc)
 
-        post_req = mock_open.call_args_list[1][0][0]
+        post_req = mock_open.call_args_list[2][0][0]
         body = json.loads(post_req.data)
         assert body["issue"]["tracker_id"] == 3
 
+    def test_priority_id_included_in_payload(self):
+        """Issue payload must include priority_id resolved to 'normal'."""
+        adapter = Easy8Adapter("https://es.example.com", "apikey")
+        responses = [self._tracker_resp(), self._priority_resp(), self._issue_resp()]
+
+        with patch("urllib.request.urlopen", side_effect=responses) as mock_open:
+            from otaman_adapters.easy8 import SpecChange
+            sc = SpecChange(title="My issue", agent_name="core-agent")
+            adapter.create_issue(sc)
+
+        post_req = mock_open.call_args_list[2][0][0]
+        body = json.loads(post_req.data)
+        assert body["issue"]["priority_id"] == 2
+
     def test_posts_to_issues_json(self):
         adapter = Easy8Adapter("https://es.example.com", "apikey")
-        responses = [self._tracker_resp(), self._issue_resp()]
+        responses = [self._tracker_resp(), self._priority_resp(), self._issue_resp()]
 
         with patch("urllib.request.urlopen", side_effect=responses) as mock_open:
             from otaman_adapters.easy8 import SpecChange
             sc = SpecChange(title="Spec", agent_name="spec-agent")
             adapter.create_issue(sc)
 
-        post_req = mock_open.call_args_list[1][0][0]
+        post_req = mock_open.call_args_list[2][0][0]
         assert "/issues.json" in post_req.full_url
         assert post_req.method == "POST"
 
@@ -478,14 +495,34 @@ class TestCreateIssue:
         )
         tracker_exc.read = lambda: b""
 
-        with patch("urllib.request.urlopen", side_effect=[tracker_exc, self._issue_resp()]) as mock_open:
+        with patch("urllib.request.urlopen", side_effect=[tracker_exc, self._priority_resp(), self._issue_resp()]) as mock_open:
             from otaman_adapters.easy8 import SpecChange
             sc = SpecChange(title="T", agent_name="a")
             result = adapter.create_issue(sc)
 
-        post_req = mock_open.call_args_list[1][0][0]
+        post_req = mock_open.call_args_list[2][0][0]
         body = json.loads(post_req.data)
         assert "tracker_id" not in body["issue"]
+        assert result.id == 100
+
+    def test_priority_id_skipped_when_resolution_fails(self):
+        """If priority endpoint fails, issue is still created without priority_id."""
+        import urllib.error
+        adapter = Easy8Adapter("https://es.example.com", "apikey")
+        priority_exc = urllib.error.HTTPError(
+            url="https://es.example.com/enumerations/issue_priorities.json",
+            code=403, msg="Forbidden", hdrs=MagicMock(), fp=MagicMock(),
+        )
+        priority_exc.read = lambda: b""
+
+        with patch("urllib.request.urlopen", side_effect=[self._tracker_resp(), priority_exc, self._issue_resp()]) as mock_open:
+            from otaman_adapters.easy8 import SpecChange
+            sc = SpecChange(title="T", agent_name="a")
+            result = adapter.create_issue(sc)
+
+        post_req = mock_open.call_args_list[2][0][0]
+        body = json.loads(post_req.data)
+        assert "priority_id" not in body["issue"]
         assert result.id == 100
 
 
