@@ -418,6 +418,9 @@ class TestCreateIssue:
     def _priority_resp(self):
         return _make_response({"issue_priorities": [{"id": 2, "name": "Normal"}, {"id": 3, "name": "High"}]})
 
+    def _custom_fields_resp(self):
+        return _make_response({"custom_fields": []})
+
     def _issue_resp(self, subject="[core-agent] My issue"):
         return _make_response({
             "issue": {
@@ -430,58 +433,54 @@ class TestCreateIssue:
             }
         })
 
+    def _responses(self, issue_resp=None):
+        """Standard 4-call sequence: tracker, priority, custom_fields, issue."""
+        return [self._tracker_resp(), self._priority_resp(), self._custom_fields_resp(), issue_resp or self._issue_resp()]
+
     def test_mode_c_title_prefix(self):
         """Issue subject must start with [<agent-name>]."""
         adapter = Easy8Adapter("https://es.example.com", "apikey")
-        responses = [self._tracker_resp(), self._priority_resp(), self._issue_resp("[core-agent] My issue")]
-
-        with patch("urllib.request.urlopen", side_effect=responses) as mock_open:
+        with patch("urllib.request.urlopen", side_effect=self._responses(self._issue_resp("[core-agent] My issue"))) as mock_open:
             from otaman_adapters.easy8 import SpecChange
             sc = SpecChange(title="My issue", agent_name="core-agent")
-            result = adapter.create_issue(sc)
+            adapter.create_issue(sc)
 
-        post_req = mock_open.call_args_list[2][0][0]
+        post_req = mock_open.call_args_list[3][0][0]
         body = json.loads(post_req.data)
         assert body["issue"]["subject"] == "[core-agent] My issue"
 
     def test_tracker_id_included_in_payload(self):
         """Issue payload must include tracker_id resolved from tracker name."""
         adapter = Easy8Adapter("https://es.example.com", "apikey")
-        responses = [self._tracker_resp(), self._priority_resp(), self._issue_resp()]
-
-        with patch("urllib.request.urlopen", side_effect=responses) as mock_open:
+        with patch("urllib.request.urlopen", side_effect=self._responses()) as mock_open:
             from otaman_adapters.easy8 import SpecChange
             sc = SpecChange(title="My issue", agent_name="core-agent")
             adapter.create_issue(sc)
 
-        post_req = mock_open.call_args_list[2][0][0]
+        post_req = mock_open.call_args_list[3][0][0]
         body = json.loads(post_req.data)
         assert body["issue"]["tracker_id"] == 3
 
     def test_priority_id_included_in_payload(self):
         """Issue payload must include priority_id resolved to 'normal'."""
         adapter = Easy8Adapter("https://es.example.com", "apikey")
-        responses = [self._tracker_resp(), self._priority_resp(), self._issue_resp()]
-
-        with patch("urllib.request.urlopen", side_effect=responses) as mock_open:
+        with patch("urllib.request.urlopen", side_effect=self._responses()) as mock_open:
             from otaman_adapters.easy8 import SpecChange
             sc = SpecChange(title="My issue", agent_name="core-agent")
             adapter.create_issue(sc)
 
-        post_req = mock_open.call_args_list[2][0][0]
+        post_req = mock_open.call_args_list[3][0][0]
         body = json.loads(post_req.data)
         assert body["issue"]["priority_id"] == 2
 
     def test_posts_to_issues_json(self):
         adapter = Easy8Adapter("https://es.example.com", "apikey")
-        responses = [self._tracker_resp(), self._priority_resp(), self._issue_resp()]
-
-        with patch("urllib.request.urlopen", side_effect=responses) as mock_open:
+        with patch("urllib.request.urlopen", side_effect=self._responses()) as mock_open:
             from otaman_adapters.easy8 import SpecChange
             sc = SpecChange(title="Spec", agent_name="spec-agent")
             adapter.create_issue(sc)
 
-        post_req = mock_open.call_args_list[2][0][0]
+        post_req = mock_open.call_args_list[3][0][0]
         assert "/issues.json" in post_req.full_url
         assert post_req.method == "POST"
 
@@ -495,12 +494,12 @@ class TestCreateIssue:
         )
         tracker_exc.read = lambda: b""
 
-        with patch("urllib.request.urlopen", side_effect=[tracker_exc, self._priority_resp(), self._issue_resp()]) as mock_open:
+        with patch("urllib.request.urlopen", side_effect=[tracker_exc, self._priority_resp(), self._custom_fields_resp(), self._issue_resp()]) as mock_open:
             from otaman_adapters.easy8 import SpecChange
             sc = SpecChange(title="T", agent_name="a")
             result = adapter.create_issue(sc)
 
-        post_req = mock_open.call_args_list[2][0][0]
+        post_req = mock_open.call_args_list[3][0][0]
         body = json.loads(post_req.data)
         assert "tracker_id" not in body["issue"]
         assert result.id == 100
@@ -515,12 +514,12 @@ class TestCreateIssue:
         )
         priority_exc.read = lambda: b""
 
-        with patch("urllib.request.urlopen", side_effect=[self._tracker_resp(), priority_exc, self._issue_resp()]) as mock_open:
+        with patch("urllib.request.urlopen", side_effect=[self._tracker_resp(), priority_exc, self._custom_fields_resp(), self._issue_resp()]) as mock_open:
             from otaman_adapters.easy8 import SpecChange
             sc = SpecChange(title="T", agent_name="a")
             result = adapter.create_issue(sc)
 
-        post_req = mock_open.call_args_list[2][0][0]
+        post_req = mock_open.call_args_list[3][0][0]
         body = json.loads(post_req.data)
         assert "priority_id" not in body["issue"]
         assert result.id == 100
@@ -687,3 +686,133 @@ class TestResolvePmUserId:
         adapter = self._adapter_with_users(users=[])
         entry = HumanRosterEntry(name="Roman", email="starikov@inprimex.com", roles=["cofounder"])
         assert resolve_pm_user_id(adapter, entry) is None
+
+
+# ---------------------------------------------------------------------------
+# _resolve_custom_field_ids + create_issue rich payload (tasks 4.1–4.3)
+# ---------------------------------------------------------------------------
+
+class TestCustomFieldCache:
+    def _issue_resp(self):
+        return _make_response({
+            "issue": {
+                "id": 55,
+                "subject": "[a] T",
+                "project": {"id": 1},
+                "status": {"name": "New"},
+                "custom_fields": [],
+            }
+        })
+
+    def _std_pre_resps(self):
+        """tracker + priority before the custom_fields call."""
+        return [
+            _make_response({"trackers": [{"id": 1, "name": "Task"}]}),
+            _make_response({"issue_priorities": [{"id": 2, "name": "Normal"}]}),
+        ]
+
+    def test_platform_custom_fields_bypasses_http(self):
+        """When platform_custom_fields is injected, no GET /custom_fields.json is made."""
+        adapter = Easy8Adapter(
+            "https://es.example.com", "k",
+            platform_custom_fields={"jtbd-id": 10, "otaman-agent": 11, "spec-path": 12},
+        )
+        resps = self._std_pre_resps() + [self._issue_resp()]
+        with patch("urllib.request.urlopen", side_effect=resps) as mock_open:
+            from otaman_adapters.easy8 import SpecChange
+            sc = SpecChange(title="T", agent_name="a", spec_path="s/p", jtbd_id="J-1")
+            adapter.create_issue(sc)
+
+        urls = [c[0][0].full_url for c in mock_open.call_args_list]
+        assert not any("custom_fields" in u for u in urls)
+        post_body = json.loads(mock_open.call_args_list[2][0][0].data)
+        cfv = post_body["issue"]["custom_field_values"]
+        assert cfv["10"] == "J-1"
+        assert cfv["11"] == "a"
+        assert cfv["12"] == "s/p"
+
+    def test_custom_fields_fetched_from_api(self):
+        """When no platform_custom_fields, GET /custom_fields.json populates the cache."""
+        adapter = Easy8Adapter("https://es.example.com", "k")
+        cf_resp = _make_response({"custom_fields": [
+            {"id": 7, "name": "jtbd-id", "customized_type": "issue"},
+            {"id": 8, "name": "otaman-agent", "customized_type": "issue"},
+            {"id": 9, "name": "spec-path", "customized_type": "issue"},
+            {"id": 99, "name": "unrelated", "customized_type": "project"},
+        ]})
+        resps = self._std_pre_resps() + [cf_resp, self._issue_resp()]
+        with patch("urllib.request.urlopen", side_effect=resps) as mock_open:
+            from otaman_adapters.easy8 import SpecChange
+            sc = SpecChange(title="T", agent_name="ag", spec_path="p/q", jtbd_id="J-2")
+            adapter.create_issue(sc)
+
+        post_body = json.loads(mock_open.call_args_list[3][0][0].data)
+        cfv = post_body["issue"]["custom_field_values"]
+        assert cfv["7"] == "J-2"
+        assert cfv["8"] == "ag"
+        assert cfv["9"] == "p/q"
+        assert "99" not in cfv
+
+    def test_cache_hit_skips_second_http_call(self):
+        """Second create_issue call reuses all caches — only the POST is made."""
+        adapter = Easy8Adapter(
+            "https://es.example.com", "k",
+            platform_custom_fields={"jtbd-id": 5},
+        )
+        # First call: tracker + priority + POST (custom_fields skipped via platform_custom_fields)
+        # Second call: all caches warm → only POST
+        resps = self._std_pre_resps() + [self._issue_resp(), self._issue_resp()]
+        with patch("urllib.request.urlopen", side_effect=resps) as mock_open:
+            from otaman_adapters.easy8 import SpecChange
+            sc = SpecChange(title="T", agent_name="a")
+            adapter.create_issue(sc)
+            adapter.create_issue(sc)
+
+        urls = [c[0][0].full_url for c in mock_open.call_args_list]
+        assert sum(1 for u in urls if "custom_fields" in u) == 0
+        assert len(urls) == 4  # tracker, priority, POST×2
+
+    def test_custom_field_values_absent_when_no_cf_ids_resolved(self):
+        """No custom_field_values key in payload when cf_map is empty."""
+        adapter = Easy8Adapter("https://es.example.com", "k")
+        cf_resp = _make_response({"custom_fields": []})
+        resps = self._std_pre_resps() + [cf_resp, self._issue_resp()]
+        with patch("urllib.request.urlopen", side_effect=resps):
+            from otaman_adapters.easy8 import SpecChange
+            sc = SpecChange(title="T", agent_name="a")
+            result = adapter.create_issue(sc)
+
+        assert result.id == 55
+
+    def test_description_added_to_payload(self):
+        """Non-empty spec_change.description is sent in the issue payload."""
+        adapter = Easy8Adapter("https://es.example.com", "k")
+        resps = self._std_pre_resps() + [_make_response({"custom_fields": []}), self._issue_resp()]
+        with patch("urllib.request.urlopen", side_effect=resps) as mock_open:
+            from otaman_adapters.easy8 import SpecChange
+            sc = SpecChange(title="T", agent_name="a", description="Full proposal text here.")
+            adapter.create_issue(sc)
+
+        post_body = json.loads(mock_open.call_args_list[3][0][0].data)
+        assert post_body["issue"]["description"] == "Full proposal text here."
+
+    def test_description_absent_when_empty(self):
+        """Empty description does not add a 'description' key to the payload."""
+        adapter = Easy8Adapter("https://es.example.com", "k")
+        resps = self._std_pre_resps() + [_make_response({"custom_fields": []}), self._issue_resp()]
+        with patch("urllib.request.urlopen", side_effect=resps) as mock_open:
+            from otaman_adapters.easy8 import SpecChange
+            sc = SpecChange(title="T", agent_name="a")
+            adapter.create_issue(sc)
+
+        post_body = json.loads(mock_open.call_args_list[3][0][0].data)
+        assert "description" not in post_body["issue"]
+
+    def test_platform_custom_fields_constructor_kwarg(self):
+        """platform_custom_fields kwarg is stored on the adapter."""
+        adapter = Easy8Adapter(
+            "https://es.example.com", "k",
+            platform_custom_fields={"jtbd-id": 42},
+        )
+        assert adapter._platform_custom_fields == {"jtbd-id": 42}
+        assert adapter._custom_field_cache == {}
