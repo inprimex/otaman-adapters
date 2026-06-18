@@ -118,6 +118,7 @@ except ImportError:
         project_id: Optional[int] = None
         jtbd_id: Optional[str] = None
         spec_path: Optional[str] = None
+        description: str = ""
 
     class SpecState:
         DECLARED = "declared"
@@ -252,12 +253,15 @@ class Easy8Adapter(PmSyncAdapter):  # type: ignore[misc]
         *,
         tracker: str = "Task",
         status_map: Optional[dict] = None,
+        platform_custom_fields: Optional[dict] = None,
     ) -> None:
         self._client = Easy8Client(base_url, api_key)
         self._project_map: dict[str, int] = {}
         self._status_cache: dict[str, int] = {}
         self._tracker_cache: dict[str, int] = {}
         self._priority_cache: dict[str, int] = {}
+        self._custom_field_cache: dict[str, int] = {}
+        self._platform_custom_fields: dict[str, int] = platform_custom_fields or {}
         self._root_project_id: int | None = None
         self._tracker_name = tracker
         self._status_map: dict[str, str] = dict(_DEFAULT_STATUS_MAP)
@@ -357,9 +361,22 @@ class Easy8Adapter(PmSyncAdapter):  # type: ignore[misc]
         if project_id is not None:
             payload["project_id"] = project_id
 
-        custom_fields = self._build_custom_fields(spec_change)
-        if custom_fields:
-            payload["custom_fields"] = custom_fields
+        if getattr(spec_change, "description", ""):
+            payload["description"] = spec_change.description
+
+        cf_map = self._resolve_custom_field_ids()
+        _FIELD_MAP = {
+            "jtbd-id":      str(getattr(spec_change, "jtbd_id", "") or ""),
+            "otaman-agent": str(getattr(spec_change, "agent_name", "") or ""),
+            "spec-path":    str(getattr(spec_change, "spec_path", "") or ""),
+        }
+        custom_field_values: dict[str, str] = {}
+        for field_name, value in _FIELD_MAP.items():
+            cf_id = cf_map.get(field_name.lower())
+            if cf_id is not None and value:
+                custom_field_values[str(cf_id)] = value
+        if custom_field_values:
+            payload["custom_field_values"] = custom_field_values
 
         resp = self._client.post("/issues.json", {"issue": payload})
         return _parse_issue(resp["issue"])
@@ -584,6 +601,30 @@ class Easy8Adapter(PmSyncAdapter):  # type: ignore[misc]
             except Exception:
                 return None
         return self._priority_cache.get(priority_name.lower())
+
+    def _resolve_custom_field_ids(self) -> dict[str, int]:
+        """Return {name.lower(): id} for all issue custom fields. Cached.
+
+        Resolution order:
+        1. Already-populated cache → return immediately.
+        2. ``platform_custom_fields`` injected at construction → use as-is.
+        3. ``GET /custom_fields.json`` → filter to ``customized_type == 'issue'``.
+        Falls back to empty dict on any HTTP error so callers can proceed without
+        custom field support.
+        """
+        if self._custom_field_cache:
+            return self._custom_field_cache
+        if self._platform_custom_fields:
+            self._custom_field_cache = {k.lower(): int(v) for k, v in self._platform_custom_fields.items()}
+            return self._custom_field_cache
+        try:
+            resp = self._client.get("/custom_fields.json")
+            for cf in resp.get("custom_fields", []):
+                if cf.get("customized_type") == "issue":
+                    self._custom_field_cache[cf["name"].lower()] = int(cf["id"])
+        except Exception:
+            pass
+        return self._custom_field_cache
 
     def _build_custom_fields(self, spec_change: Any) -> list[dict]:
         """Build custom_fields array for known field names (skip unknowns).
