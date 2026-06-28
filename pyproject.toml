@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "otaman-adapters"
-version = "0.1.0"
+version = "0.2.0"
 description = "Otaman harness drivers: per-runtime skill registration adapters"
 requires-python = ">=3.10"
 dependencies = [
