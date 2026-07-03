@@ -89,34 +89,39 @@ capabilities = AdapterCapabilities.for_levels(
 capabilities = AdapterCapabilities.for_levels(
     DataClassification.INTERNAL,
     DataClassification.SENSITIVE,
-    DataClassification.PHI,
-    DataClassification.REGULATED,
-    notes="Configurable: Azure OpenAI + Microsoft BAA covers PHI + REGULATED. "
-          "Plain OpenAI API (api.openai.com) covers INTERNAL + SENSITIVE only. "
-          "Operator must configure Azure endpoint for PHI/REGULATED clearance."
+    notes="Default: plain OpenAI API (api.openai.com, no BAA). "
+          "INTERNAL + SENSITIVE cleared. PHI/REGULATED require Azure OpenAI "
+          "with a Microsoft BAA (operator-configured, not default)."
 )
 ```
 
-**Cleared**: `INTERNAL`, `SENSITIVE`, `PHI`, `REGULATED`
-**Not declared**: `PII` (see note)
+**Cleared**: `INTERNAL`, `SENSITIVE`
+**Not cleared by default**: `PII`, `PHI`, `REGULATED`
+
+**Updated 2026-07-03 (F136 fix)**: this declaration previously listed `PHI`
+and `REGULATED` as cleared, reflecting the *maximum achievable* posture if an
+operator configured Azure OpenAI + a Microsoft BAA. That was inconsistent with
+every other adapter's default-posture convention and with `AdapterCapabilities`'s
+own documented semantics (`compliance` = what the *default* backend is
+certified for). The router's `clears()` membership check is a static
+class-attribute lookup with no way to verify an operator actually configured
+Azure — so the old declaration risked routing PHI/REGULATED workloads to a
+plain `api.openai.com` backend with no BAA. Narrowed to match
+`ClaudeCodeAdapter`/`GeminiCliAdapter` below.
 
 **Rationale**:
-- This is a **configurable adapter** — the instructions block it generates is
-  backend-agnostic.  The compliance posture reflects the *maximum achievable*
-  clearance when properly configured, not a lowest-common-denominator.
-- Azure OpenAI Service with a Microsoft HIPAA BAA covers `PHI`.  Azure also
-  holds PCI-DSS Level 1 certification, covering `REGULATED` for payment-card
-  scope, and meets FedRAMP High, ISO 27001, SOC 2, and other regulatory
-  frameworks relevant to `REGULATED` workloads.
-- Plain `api.openai.com` (non-Azure) does not offer a BAA; operators routing
-  PHI/REGULATED tasks to this adapter MUST configure an Azure OpenAI endpoint.
-  The `routing.yaml` per-backend configuration is the enforcement point.
-- `PII` is not explicitly declared because it is subsumed by the `PHI`
-  coverage (Azure BAA covers PHI which includes PII in healthcare context;
-  Azure DPA covers GDPR). The router will enforce `PII` routing against the
-  declared set — an operator needing explicit `PII` coverage should add it via
-  `routing.yaml` per-org overlay. This will be documented in `routing.yaml`
-  schema guidance.
+- Plain `api.openai.com` does not offer a BAA or PCI-DSS certification;
+  `INTERNAL` and `SENSITIVE` data can be routed here by default.
+- Azure OpenAI Service with a Microsoft HIPAA BAA covers `PHI`, and Azure's
+  PCI-DSS Level 1 / FedRAMP High / ISO 27001 / SOC 2 certifications can cover
+  `REGULATED` workloads — but this requires an operator to configure an Azure
+  OpenAI endpoint, which is not this adapter's default deployment. Per the
+  `otaman-router-v1-design` routing-policy spec, that escalation is meant to
+  be expressed as a per-backend `compliance: [...]` override in `routing.yaml`
+  (router-owned), layered on top of this adapter-level default — not a
+  static class attribute here.
+- `PII` remains undeclared for the same reason as before: no default backend
+  in this table offers a GDPR DPA at standard tier.
 
 ---
 
@@ -169,15 +174,18 @@ capabilities = AdapterCapabilities.for_levels(
 | Adapter | INTERNAL | SENSITIVE | PII | PHI | REGULATED |
 |---|---|---|---|---|---|
 | `ClaudeCodeAdapter` | ✅ | ✅ | ❌ | ❌ | ❌ |
-| `OpenAIAgentsAdapter` | ✅ | ✅ | ❌* | ✅ | ✅ |
+| `OpenAIAgentsAdapter` | ✅ | ✅ | ❌ | ❌ | ❌ |
 | `GeminiCliAdapter` | ✅ | ✅ | ❌ | ❌ | ❌ |
 | `GeminiApiAdapter` | ✅ | ✅ | ❌ | ❌ | ❌ |
 
-\* PII subsumed by PHI coverage (Azure BAA + DPA); may be added explicitly via `routing.yaml` overlay.
+All four adapters now declare identical *default*-posture semantics: no
+adapter's default backend is cleared for `PII`, `PHI`, or `REGULATED`.
 
-**For PHI/REGULATED workloads**, the router's compliance rule will select
-`OpenAIAgentsAdapter` (Azure-configured) or a self-hosted vLLM adapter when
-those clearances are needed.
+**For PHI/REGULATED workloads**, the router is expected to select a backend
+via an operator-configured `routing.yaml` per-backend `compliance` override
+(e.g. an Azure-OpenAI-configured `OpenAIAgentsAdapter` deployment, a
+Bedrock-Anthropic deployment, or a self-hosted vLLM adapter) — not via any
+adapter's static default declaration.
 
 ---
 

@@ -135,12 +135,12 @@ class TestOpenAIAgentsAdapterCompliance:
         assert OpenAIAgentsAdapter.capabilities.clears(DataClassification.SENSITIVE)
 
     def test_clears_phi(self):
-        # Azure OpenAI with BAA covers PHI — declared as configurable default
-        assert OpenAIAgentsAdapter.capabilities.clears(DataClassification.PHI)
+        # Default backend (plain OpenAI API) has no BAA — PHI not cleared by default
+        assert not OpenAIAgentsAdapter.capabilities.clears(DataClassification.PHI)
 
     def test_clears_regulated(self):
-        # Azure OpenAI with appropriate cert covers REGULATED
-        assert OpenAIAgentsAdapter.capabilities.clears(DataClassification.REGULATED)
+        # Default backend has no PCI-DSS cert — REGULATED not cleared by default
+        assert not OpenAIAgentsAdapter.capabilities.clears(DataClassification.REGULATED)
 
     def test_notes_mention_azure(self):
         assert "Azure" in OpenAIAgentsAdapter.capabilities.notes
