@@ -68,22 +68,19 @@ class OpenAIAgentsAdapter:
 
     runtime_id = _RUNTIME_ID
 
-    # Compliance posture: OpenAI Agents SDK + Azure OpenAI with a Microsoft BAA
-    # covers PHI (HIPAA) and can be configured for REGULATED workloads (PCI-DSS
-    # via Azure's compliance certifications).  This is a CONFIGURABLE adapter —
-    # the default declaration reflects the broadest achievable posture when
-    # properly configured; operators must enable Azure OpenAI + BAA to exercise
-    # PHI/REGULATED clearance.  Plain OpenAI API (api.openai.com) only covers
-    # INTERNAL + SENSITIVE.
+    # Compliance posture: default backend is plain OpenAI API (api.openai.com),
+    # which does not offer a HIPAA BAA or PCI-DSS certification.  INTERNAL and
+    # SENSITIVE data can be routed here by default.  PHI and REGULATED require
+    # an operator to configure an Azure OpenAI endpoint with a Microsoft BAA —
+    # not the default — matching the default-posture convention used by
+    # ClaudeCodeAdapter and GeminiCliAdapter/GeminiApiAdapter.
     capabilities: AdapterCapabilities = AdapterCapabilities.for_levels(
         DataClassification.INTERNAL,
         DataClassification.SENSITIVE,
-        DataClassification.PHI,
-        DataClassification.REGULATED,
         notes=(
-            "Configurable: Azure OpenAI + Microsoft BAA covers PHI + REGULATED. "
-            "Plain OpenAI API (api.openai.com) covers INTERNAL + SENSITIVE only. "
-            "Operator must configure Azure endpoint for PHI/REGULATED clearance."
+            "Default: plain OpenAI API (api.openai.com, no BAA). "
+            "INTERNAL + SENSITIVE cleared. PHI/REGULATED require Azure OpenAI "
+            "with a Microsoft BAA (operator-configured, not default)."
         ),
     )
 
