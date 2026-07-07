@@ -2,6 +2,7 @@ from pathlib import Path
 
 import yaml
 
+from ._paths import UnsafeSkillNameError, validate_skill_name_shape
 from .models import CompatibilityLevel, Skill
 
 
@@ -22,6 +23,11 @@ def load_skill(skill_path: Path) -> Skill:
 
     if "name" not in frontmatter:
         raise ValueError(f"Frontmatter missing required 'name' field in {skill_path}")
+
+    try:
+        validate_skill_name_shape(str(frontmatter["name"]))
+    except UnsafeSkillNameError as exc:
+        raise ValueError(f"Unsafe 'name' field in {skill_path}: {exc}") from exc
 
     provider_support: dict[str, CompatibilityLevel] = {}
     for runtime, level in (frontmatter.get("provider_support") or {}).items():

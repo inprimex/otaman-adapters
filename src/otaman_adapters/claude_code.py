@@ -2,6 +2,7 @@ import re
 import shutil
 from pathlib import Path
 
+from ._paths import UnsafeSkillNameError, safe_child_path
 from .capabilities import AdapterCapabilities, DataClassification
 from .models import CompatibilityLevel, RegistrationResult, Skill
 
@@ -51,7 +52,18 @@ class ClaudeCodeAdapter:
                 ))
                 continue
 
-            skill_dir = skills_root / skill.name
+            try:
+                skill_dir = safe_child_path(skills_root, skill.name)
+            except UnsafeSkillNameError as exc:
+                results.append(RegistrationResult(
+                    skill_name=skill.name,
+                    registered=False,
+                    target_path=None,
+                    compatibility=compat,
+                    reason=str(exc),
+                ))
+                continue
+
             skill_dir.mkdir(parents=True, exist_ok=True)
             dest = skill_dir / "SKILL.md"
 
@@ -85,7 +97,10 @@ class ClaudeCodeAdapter:
         """Remove registered skill directories from target_dir/skills/."""
         skills_root = target_dir / "skills"
         for name in skill_names:
-            skill_dir = skills_root / name
+            try:
+                skill_dir = safe_child_path(skills_root, name)
+            except UnsafeSkillNameError:
+                continue
             if skill_dir.exists():
                 shutil.rmtree(skill_dir)
 
