@@ -41,11 +41,16 @@ By submitting a pull request, you agree to the Contributor License Agreement (CL
 
 We use a CLA to preserve the ability to dual-license contributions under both AGPL-3.0 (Community Edition) and proprietary licenses (Enterprise Edition).
 
-**First-time contributors:** The CLA-bot will guide you through signing on your first PR. You'll need to sign both:
-- **Individual CLA (ICLA)** — if contributing on your own behalf
-- **Corporate CLA (CCLA)** — if contributing on behalf of a company
+**First-time contributors:** CLA Assistant will guide you through signing on your first PR:
+1. Open your PR
+2. CLA Assistant bot will comment with a sign link
+3. Sign the CLA (takes ~2 minutes)
+4. CLA Assistant marks the PR ready to merge
 
-See [otaman-meta CLA templates](https://github.com/inprimex/otaman-meta/tree/main/strategy/ce-ee-prep/legal) for the full agreement text.
+**What you're signing:**
+- **Individual CLA (ICLA)** — grants Inprimex Lab LLC permission to use your code in both CE (open source) and EE (proprietary)
+
+See [otaman-meta CLA templates](https://github.com/inprimex/otaman-meta/tree/main/strategy/ce-ee-prep/legal) for the full agreement text and FAQ.
 
 ## Questions or Issues?
 
