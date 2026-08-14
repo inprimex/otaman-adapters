@@ -6,6 +6,7 @@ build-backend = "hatchling.build"
 name = "otaman-adapters"
 version = "0.2.0"
 description = "Otaman harness drivers: per-runtime skill registration adapters"
+license = {text = "AGPL-3.0-only"}
 requires-python = ">=3.10"
 dependencies = [
     "pyyaml>=6.0",
