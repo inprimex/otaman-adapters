@@ -8,6 +8,7 @@ Coverage:
   - ClaudeCodeAdapter/GeminiCliAdapter unregister() ignores unsafe names
     instead of deleting outside the skills root
 """
+
 from pathlib import Path
 
 import pytest
@@ -49,6 +50,7 @@ def _raw_skill(name: str, source_path: Path) -> Skill:
 # _paths.safe_child_path / validate_skill_name_shape
 # ---------------------------------------------------------------------------
 
+
 class TestSafeChildPath:
     @pytest.mark.parametrize("name", UNSAFE_NAMES)
     def test_rejects_unsafe_names(self, tmp_path, name):
@@ -82,6 +84,7 @@ class TestSafeChildPath:
 # load_skill — rejects unsafe names at parse time
 # ---------------------------------------------------------------------------
 
+
 class TestLoadSkillRejectsUnsafeNames:
     def test_traversal_name_raises(self, tmp_path):
         p = _write_skill(tmp_path / "src", "../../etc/evil")
@@ -97,6 +100,7 @@ class TestLoadSkillRejectsUnsafeNames:
 # ---------------------------------------------------------------------------
 # ClaudeCodeAdapter — register()/unregister() defense in depth
 # ---------------------------------------------------------------------------
+
 
 class TestClaudeCodeAdapterRejectsUnsafeNames:
     @pytest.mark.parametrize("name", ["../../etc/evil", "/etc/passwd", ".."])
@@ -144,6 +148,7 @@ class TestClaudeCodeAdapterRejectsUnsafeNames:
 # ---------------------------------------------------------------------------
 # GeminiCliAdapter — same defense in depth
 # ---------------------------------------------------------------------------
+
 
 class TestGeminiCliAdapterRejectsUnsafeNames:
     @pytest.mark.parametrize("name", ["../../etc/evil", "/etc/passwd", ".."])

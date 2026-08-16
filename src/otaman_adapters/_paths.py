@@ -6,6 +6,7 @@ paths for writing and deleting files (see ``claude_code.py``, ``gemini.py``).
 ``safe_child_path`` is the single choke point that confines those paths to
 the intended root directory.
 """
+
 from __future__ import annotations
 
 from pathlib import Path

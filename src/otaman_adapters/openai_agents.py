@@ -24,11 +24,10 @@ Usage example (runtime integration):
         instructions=SKILL_INSTRUCTIONS + "\\n\\n" + BASE_INSTRUCTIONS,
     )
 """
+
 from __future__ import annotations
 
 from pathlib import Path
-
-import yaml
 
 from .capabilities import AdapterCapabilities, DataClassification
 from .models import CompatibilityLevel, RegistrationResult, Skill
@@ -100,13 +99,15 @@ class OpenAIAgentsAdapter:
             compat = skill.compatibility_for(_RUNTIME_ID)
 
             if compat == CompatibilityLevel.UNSUPPORTED:
-                results.append(RegistrationResult(
-                    skill_name=skill.name,
-                    registered=False,
-                    target_path=None,
-                    compatibility=compat,
-                    reason=f"provider_support[{_RUNTIME_ID}] = unsupported",
-                ))
+                results.append(
+                    RegistrationResult(
+                        skill_name=skill.name,
+                        registered=False,
+                        target_path=None,
+                        compatibility=compat,
+                        reason=f"provider_support[{_RUNTIME_ID}] = unsupported",
+                    )
+                )
                 continue
 
             caveat: str | None = None
@@ -116,13 +117,15 @@ class OpenAIAgentsAdapter:
             block = _render_skill_block(skill, caveat)
             blocks.append(block)
             registered_names.append(skill.name)
-            results.append(RegistrationResult(
-                skill_name=skill.name,
-                registered=True,
-                target_path=target_dir / "skills_block.md",
-                compatibility=compat,
-                caveat=caveat,
-            ))
+            results.append(
+                RegistrationResult(
+                    skill_name=skill.name,
+                    registered=True,
+                    target_path=target_dir / "skills_block.md",
+                    compatibility=compat,
+                    caveat=caveat,
+                )
+            )
 
         instructions = _build_instructions(blocks)
         _write_outputs(target_dir, instructions, registered_names)
@@ -166,6 +169,7 @@ class OpenAIAgentsAdapter:
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _render_skill_block(skill: Skill, caveat: str | None) -> str:
     """Format a single skill's frontmatter into a markdown skill block."""
     description = skill.description
@@ -176,7 +180,7 @@ def _render_skill_block(skill: Skill, caveat: str | None) -> str:
     raw_triggers = skill.raw_frontmatter.get("triggers") or []
     if raw_triggers:
         trigger_lines = "\n".join(f'- "{t}"' for t in raw_triggers)
-        triggers_section = f"\n**Trigger cues** (activate this skill when input includes):\n{trigger_lines}"
+        triggers_section = f"\n**Trigger cues** (activate when input includes):\n{trigger_lines}"
     else:
         triggers_section = ""
 

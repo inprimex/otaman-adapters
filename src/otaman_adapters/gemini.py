@@ -41,10 +41,11 @@ Summary:
 | MCP server binding | ⚠️ partial (Gemini CLI supports MCP, subset of tools) | ❌ unsupported |
 | Function calling | ✅ full (both runtimes) | ✅ full |
 """
+
 from __future__ import annotations
 
-import shutil
 import re
+import shutil
 from pathlib import Path
 
 from ._paths import UnsafeSkillNameError, safe_child_path
@@ -108,25 +109,29 @@ class GeminiCliAdapter:
             compat = skill.compatibility_for(_RUNTIME_ID_CLI)
 
             if compat == CompatibilityLevel.UNSUPPORTED:
-                results.append(RegistrationResult(
-                    skill_name=skill.name,
-                    registered=False,
-                    target_path=None,
-                    compatibility=compat,
-                    reason=f"provider_support[{_RUNTIME_ID_CLI}] = unsupported",
-                ))
+                results.append(
+                    RegistrationResult(
+                        skill_name=skill.name,
+                        registered=False,
+                        target_path=None,
+                        compatibility=compat,
+                        reason=f"provider_support[{_RUNTIME_ID_CLI}] = unsupported",
+                    )
+                )
                 continue
 
             try:
                 skill_dir = safe_child_path(skills_root, skill.name)
             except UnsafeSkillNameError as exc:
-                results.append(RegistrationResult(
-                    skill_name=skill.name,
-                    registered=False,
-                    target_path=None,
-                    compatibility=compat,
-                    reason=str(exc),
-                ))
+                results.append(
+                    RegistrationResult(
+                        skill_name=skill.name,
+                        registered=False,
+                        target_path=None,
+                        compatibility=compat,
+                        reason=str(exc),
+                    )
+                )
                 continue
 
             skill_dir.mkdir(parents=True, exist_ok=True)
@@ -138,22 +143,26 @@ class GeminiCliAdapter:
                     _inject_caveat(skill.source_path.read_text(encoding="utf-8"), caveat),
                     encoding="utf-8",
                 )
-                results.append(RegistrationResult(
-                    skill_name=skill.name,
-                    registered=True,
-                    target_path=dest,
-                    compatibility=compat,
-                    caveat=caveat,
-                ))
+                results.append(
+                    RegistrationResult(
+                        skill_name=skill.name,
+                        registered=True,
+                        target_path=dest,
+                        compatibility=compat,
+                        caveat=caveat,
+                    )
+                )
             else:
                 shutil.copy2(skill.source_path, dest)
                 _copy_siblings(skill.source_path.parent, skill_dir)
-                results.append(RegistrationResult(
-                    skill_name=skill.name,
-                    registered=True,
-                    target_path=dest,
-                    compatibility=compat,
-                ))
+                results.append(
+                    RegistrationResult(
+                        skill_name=skill.name,
+                        registered=True,
+                        target_path=dest,
+                        compatibility=compat,
+                    )
+                )
 
         return results
 
@@ -224,25 +233,31 @@ class GeminiApiAdapter:
             compat = skill.compatibility_for(_RUNTIME_ID_API)
 
             if compat == CompatibilityLevel.UNSUPPORTED:
-                results.append(RegistrationResult(
-                    skill_name=skill.name,
-                    registered=False,
-                    target_path=None,
-                    compatibility=compat,
-                    reason=f"provider_support[{_RUNTIME_ID_API}] = unsupported",
-                ))
+                results.append(
+                    RegistrationResult(
+                        skill_name=skill.name,
+                        registered=False,
+                        target_path=None,
+                        compatibility=compat,
+                        reason=f"provider_support[{_RUNTIME_ID_API}] = unsupported",
+                    )
+                )
                 continue
 
-            caveat = skill.notes_for(_RUNTIME_ID_API) if compat == CompatibilityLevel.PARTIAL else None
+            caveat = (
+                skill.notes_for(_RUNTIME_ID_API) if compat == CompatibilityLevel.PARTIAL else None
+            )
             blocks.append(_render_skill_block(skill, caveat))
             registered_names.append(skill.name)
-            results.append(RegistrationResult(
-                skill_name=skill.name,
-                registered=True,
-                target_path=target_dir / "skills_block.md",
-                compatibility=compat,
-                caveat=caveat,
-            ))
+            results.append(
+                RegistrationResult(
+                    skill_name=skill.name,
+                    registered=True,
+                    target_path=target_dir / "skills_block.md",
+                    compatibility=compat,
+                    caveat=caveat,
+                )
+            )
 
         instructions = _build_instructions(blocks)
         _write_outputs(target_dir, instructions, registered_names)
@@ -261,7 +276,9 @@ class GeminiApiAdapter:
             compat = skill.compatibility_for(_RUNTIME_ID_API)
             if compat == CompatibilityLevel.UNSUPPORTED:
                 continue
-            caveat = skill.notes_for(_RUNTIME_ID_API) if compat == CompatibilityLevel.PARTIAL else None
+            caveat = (
+                skill.notes_for(_RUNTIME_ID_API) if compat == CompatibilityLevel.PARTIAL else None
+            )
             blocks.append(_render_skill_block(skill, caveat))
         return _build_instructions(blocks)
 
@@ -269,6 +286,7 @@ class GeminiApiAdapter:
 # ---------------------------------------------------------------------------
 # Helpers (shared with ClaudeCodeAdapter logic)
 # ---------------------------------------------------------------------------
+
 
 def _inject_caveat(content: str, caveat: str | None) -> str:
     """Append a [CAVEAT: …] note to the description field in frontmatter."""

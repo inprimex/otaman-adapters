@@ -6,28 +6,30 @@ so no external dependencies are required.
 
 Capabilities were probed live on es.sunflowers.online (2026-06 audit).
 """
+
 from __future__ import annotations
 
 import json
-import urllib.request
-import urllib.parse
 import urllib.error
-from typing import Any, Optional
+import urllib.parse
+import urllib.request
+from dataclasses import dataclass as _roster_dc
+from typing import Any
 
 try:
     from otaman_core.pm_sync import (
-        PmSyncAdapter,
         PmAdapterCapabilities,
-        PmSyncConfig,
-        PmProject,
+        PmInboundEvent,
         PmIssue,
         PmIssueFilters,
-        PmStatus,
         PmPriority,
-        PmInboundEvent,
-        WebhookRegistration,
+        PmProject,
+        PmStatus,
+        PmSyncAdapter,
+        PmSyncConfig,
         SpecChange,
         SpecState,
+        WebhookRegistration,
         register_pm_adapter,
     )
 except ImportError:
@@ -41,7 +43,8 @@ except ImportError:
     # package is present.
     # -----------------------------------------------------------------------
 
-    from dataclasses import dataclass as _dc, field as _field
+    from dataclasses import dataclass as _dc
+    from dataclasses import field as _field
 
     @_dc
     class PmAdapterCapabilities:
@@ -58,7 +61,7 @@ except ImportError:
         rest_api: bool = False
         native_assignee_metrics: bool = False
         project_hierarchy: bool = False
-        github_url_field: Optional[str] = None
+        github_url_field: str | None = None
         project_custom_fields_api: bool = False
 
     @_dc
@@ -71,7 +74,7 @@ except ImportError:
         id: int = 0
         name: str = ""
         identifier: str = ""
-        parent_id: Optional[int] = None
+        parent_id: int | None = None
 
     @_dc
     class PmIssue:
@@ -80,13 +83,13 @@ except ImportError:
         project_id: int = 0
         status: str = ""
         priority: str = ""
-        assignee: Optional[str] = None
+        assignee: str | None = None
         custom_fields: dict = _field(default_factory=dict)
 
     @_dc
     class PmIssueFilters:
-        project_id: Optional[int] = None
-        status_id: Optional[str] = None
+        project_id: int | None = None
+        status_id: str | None = None
 
     @_dc
     class PmStatus:
@@ -101,8 +104,8 @@ except ImportError:
     @_dc
     class PmInboundEvent:
         event_type: str = ""
-        project_id: Optional[int] = None
-        issue_id: Optional[int] = None
+        project_id: int | None = None
+        issue_id: int | None = None
         payload: dict = _field(default_factory=dict)
 
     @_dc
@@ -115,9 +118,9 @@ except ImportError:
     class SpecChange:
         title: str = ""
         agent_name: str = ""
-        project_id: Optional[int] = None
-        jtbd_id: Optional[str] = None
-        spec_path: Optional[str] = None
+        project_id: int | None = None
+        jtbd_id: str | None = None
+        spec_path: str | None = None
         description: str = ""
 
     class SpecState:
@@ -154,6 +157,7 @@ EASY8_CAPABILITIES = PmAdapterCapabilities(
 # HTTP client
 # ---------------------------------------------------------------------------
 
+
 class Easy8Error(Exception):
     """Raised when the Easy8 API returns a non-2xx response."""
 
@@ -185,14 +189,14 @@ class Easy8Client:
         self,
         method: str,
         path: str,
-        data: Optional[dict] = None,
-        params: Optional[dict] = None,
+        data: dict | None = None,
+        params: dict | None = None,
     ) -> dict:
         url = f"{self._base_url}{path}"
         if params:
             url = f"{url}?{urllib.parse.urlencode(params)}"
 
-        body_bytes: Optional[bytes] = None
+        body_bytes: bytes | None = None
         if data is not None:
             body_bytes = json.dumps(data).encode("utf-8")
 
@@ -217,7 +221,7 @@ class Easy8Client:
     # Public API
     # ------------------------------------------------------------------
 
-    def get(self, path: str, params: Optional[dict] = None) -> dict:
+    def get(self, path: str, params: dict | None = None) -> dict:
         """GET *path* and return parsed JSON body."""
         return self._do_request("GET", path, params=params)
 
@@ -252,8 +256,8 @@ class Easy8Adapter(PmSyncAdapter):  # type: ignore[misc]
         api_key: str,
         *,
         tracker: str = "Task",
-        status_map: Optional[dict] = None,
-        platform_custom_fields: Optional[dict] = None,
+        status_map: dict | None = None,
+        platform_custom_fields: dict | None = None,
     ) -> None:
         self._client = Easy8Client(base_url, api_key)
         self._project_map: dict[str, int] = {}
@@ -328,9 +332,7 @@ class Easy8Adapter(PmSyncAdapter):  # type: ignore[misc]
                     "identifier": identifier,
                     "parent_id": parent_id,
                     "homepage": github_url,
-                    "description": (
-                        f"# Otaman metadata\nprogram-key: {identifier}"
-                    ),
+                    "description": (f"# Otaman metadata\nprogram-key: {identifier}"),
                 }
             },
         )
@@ -366,9 +368,9 @@ class Easy8Adapter(PmSyncAdapter):  # type: ignore[misc]
 
         cf_map = self._resolve_custom_field_ids()
         _FIELD_MAP = {
-            "jtbd-id":      str(getattr(spec_change, "jtbd_id", "") or ""),
+            "jtbd-id": str(getattr(spec_change, "jtbd_id", "") or ""),
             "otaman-agent": str(getattr(spec_change, "agent_name", "") or ""),
-            "spec-path":    str(getattr(spec_change, "spec_path", "") or ""),
+            "spec-path": str(getattr(spec_change, "spec_path", "") or ""),
         }
         custom_field_values: dict[str, str] = {}
         for field_name, value in _FIELD_MAP.items():
@@ -481,8 +483,8 @@ class Easy8Adapter(PmSyncAdapter):  # type: ignore[misc]
 
     def handle_inbound_event(self, payload: dict) -> PmInboundEvent:
         """Parse a raw Easy8 webhook payload into a *PmInboundEvent*."""
-        project_id: Optional[int] = None
-        issue_id: Optional[int] = None
+        project_id: int | None = None
+        issue_id: int | None = None
 
         # Redmine webhook payload shapes vary; try common keys
         raw_project = payload.get("project") or {}
@@ -515,18 +517,12 @@ class Easy8Adapter(PmSyncAdapter):  # type: ignore[misc]
     def list_statuses(self) -> list:
         """Return all issue statuses defined in Easy8."""
         resp = self._client.get("/issue_statuses.json")
-        return [
-            PmStatus(id=s["id"], name=s["name"])
-            for s in resp.get("issue_statuses", [])
-        ]
+        return [PmStatus(id=s["id"], name=s["name"]) for s in resp.get("issue_statuses", [])]
 
     def list_priorities(self) -> list:
         """Return all issue priorities defined in Easy8."""
         resp = self._client.get("/enumerations/issue_priorities.json")
-        return [
-            PmPriority(id=p["id"], name=p["name"])
-            for p in resp.get("issue_priorities", [])
-        ]
+        return [PmPriority(id=p["id"], name=p["name"]) for p in resp.get("issue_priorities", [])]
 
     def get_users(self) -> list[dict]:
         """Return all users from Easy8 as raw dicts.
@@ -550,7 +546,7 @@ class Easy8Adapter(PmSyncAdapter):  # type: ignore[misc]
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _find_project_by_name(self, name: str) -> Optional[PmProject]:
+    def _find_project_by_name(self, name: str) -> PmProject | None:
         """Scan paginated project list for a project with *name*; return None if absent.
 
         Easy8 ignores the ``identifier`` field in POST /projects.json and assigns
@@ -580,7 +576,7 @@ class Easy8Adapter(PmSyncAdapter):  # type: ignore[misc]
                 self._status_cache[s.name.lower()] = s.id
         return self._status_cache.get(status_name.lower(), 1)
 
-    def _resolve_tracker_id(self, tracker_name: str) -> Optional[int]:
+    def _resolve_tracker_id(self, tracker_name: str) -> int | None:
         """Return tracker id for *tracker_name* (case-insensitive), or None if not found."""
         if not self._tracker_cache:
             try:
@@ -591,7 +587,7 @@ class Easy8Adapter(PmSyncAdapter):  # type: ignore[misc]
                 return None
         return self._tracker_cache.get(tracker_name.lower())
 
-    def _resolve_priority_id(self, priority_name: str) -> Optional[int]:
+    def _resolve_priority_id(self, priority_name: str) -> int | None:
         """Return priority id for *priority_name* (case-insensitive), or None if not found."""
         if not self._priority_cache:
             try:
@@ -615,7 +611,9 @@ class Easy8Adapter(PmSyncAdapter):  # type: ignore[misc]
         if self._custom_field_cache:
             return self._custom_field_cache
         if self._platform_custom_fields:
-            self._custom_field_cache = {k.lower(): int(v) for k, v in self._platform_custom_fields.items()}
+            self._custom_field_cache = {
+                k.lower(): int(v) for k, v in self._platform_custom_fields.items()
+            }
             return self._custom_field_cache
         try:
             resp = self._client.get("/custom_fields.json")
@@ -642,6 +640,7 @@ class Easy8Adapter(PmSyncAdapter):  # type: ignore[misc]
 # Parsing helpers
 # ---------------------------------------------------------------------------
 
+
 def _parse_project(data: dict) -> PmProject:
     parent = data.get("parent")
     parent_id = parent.get("id") if isinstance(parent, dict) else None
@@ -658,11 +657,9 @@ def _parse_issue(data: dict) -> PmIssue:
     status_name = status_obj.get("name", "") if isinstance(status_obj, dict) else ""
     project_id = (data.get("project") or {}).get("id", 0)
     cf_map = {
-        cf["name"]: cf.get("value")
-        for cf in data.get("custom_fields", [])
-        if isinstance(cf, dict)
+        cf["name"]: cf.get("value") for cf in data.get("custom_fields", []) if isinstance(cf, dict)
     }
-    # Try core PmIssue fields first (id, project_id, subject, status, agent_name, spec_path, jtbd_id)
+    # Try core PmIssue fields first (full spec)
     try:
         return PmIssue(
             id=data["id"],
@@ -675,7 +672,7 @@ def _parse_issue(data: dict) -> PmIssue:
         )
     except TypeError:
         pass
-    # Fallback: local stub PmIssue (id, subject, project_id, status, priority, assignee, custom_fields)
+    # Fallback: local stub PmIssue (minimal spec)
     priority_obj = data.get("priority") or {}
     assignee_obj = data.get("assigned_to") or {}
     return PmIssue(
@@ -693,8 +690,6 @@ def _parse_issue(data: dict) -> PmIssue:
 # Human roster helpers (task 4.3)
 # ---------------------------------------------------------------------------
 
-from dataclasses import dataclass as _roster_dc
-
 
 @_roster_dc
 class HumanRosterEntry:
@@ -707,13 +702,13 @@ class HumanRosterEntry:
     name: str
     email: str
     roles: list
-    pm_user_id: Optional[int] = None
+    pm_user_id: int | None = None
 
 
 def resolve_pm_user_id(
-    adapter: "Easy8Adapter",
+    adapter: Easy8Adapter,
     roster_entry: HumanRosterEntry,
-) -> Optional[int]:
+) -> int | None:
     """Resolve the PM user id for *roster_entry* against Easy8's user list.
 
     Matching strategy (in order):
@@ -731,7 +726,7 @@ def resolve_pm_user_id(
     email_lower = roster_entry.email.lower()
     name_lower = roster_entry.name.lower()
 
-    name_match: Optional[int] = None
+    name_match: int | None = None
     for user in users:
         # Redmine stores email under "mail" key
         if user.get("mail", "").lower() == email_lower:
@@ -745,6 +740,7 @@ def resolve_pm_user_id(
 # ---------------------------------------------------------------------------
 # MCP Tier 2 client (task 9.2)
 # ---------------------------------------------------------------------------
+
 
 class Easy8McpClient:
     """HTTP transport wrapper for the Easy8 MCP server endpoint.

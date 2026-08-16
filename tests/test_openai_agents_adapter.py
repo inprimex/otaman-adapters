@@ -3,34 +3,32 @@
 Mirrors the structure of test_claude_code_adapter.py for cross-adapter
 consistency, with OpenAI-specific assertions about the instructions block.
 """
+
 from __future__ import annotations
 
-import textwrap
 from pathlib import Path
 from typing import Any
 
 import pytest
 import yaml
-
-from otaman_adapters import (
-    CompatibilityLevel,
-    OpenAIAgentsAdapter,
-    RegistrationResult,
-    Skill,
-    load_skill,
-)
-from otaman_adapters.adapter import SkillAdapter
-from otaman_adapters.openai_agents import _build_instructions, _render_skill_block
-
 from conftest import (
     CTO_ADVISOR_PATH,
     KNOWLEDGE_CAPTURE_PATH,
     PROJECT_ESTIMATOR_PATH,
 )
 
+from otaman_adapters import (
+    CompatibilityLevel,
+    OpenAIAgentsAdapter,
+    Skill,
+    load_skill,
+)
+from otaman_adapters.adapter import SkillAdapter
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_skill(
     name: str,
@@ -64,6 +62,7 @@ def _make_skill(
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def adapter() -> OpenAIAgentsAdapter:
@@ -110,6 +109,7 @@ def skill_with_triggers(tmp_path) -> Skill:
 # TestOutputFiles
 # ---------------------------------------------------------------------------
 
+
 class TestOutputFiles:
     """Adapter writes skills_block.md and skills_block.py to target_dir."""
 
@@ -152,6 +152,7 @@ class TestOutputFiles:
 # TestInstructionsContent
 # ---------------------------------------------------------------------------
 
+
 class TestInstructionsContent:
     """The generated instructions block contains the correct skill descriptions."""
 
@@ -192,6 +193,7 @@ class TestInstructionsContent:
 # TestUnsupportedSkill
 # ---------------------------------------------------------------------------
 
+
 class TestUnsupportedSkill:
     def test_unsupported_skill_not_registered(self, adapter, unsupported_skill, tmp_path):
         results = adapter.register([unsupported_skill], tmp_path)
@@ -219,6 +221,7 @@ class TestUnsupportedSkill:
 # TestPartialCaveat
 # ---------------------------------------------------------------------------
 
+
 class TestPartialCaveat:
     def test_partial_skill_is_registered(self, adapter, partial_skill, tmp_path):
         results = adapter.register([partial_skill], tmp_path)
@@ -243,6 +246,7 @@ class TestPartialCaveat:
 # ---------------------------------------------------------------------------
 # TestUntestedSkill
 # ---------------------------------------------------------------------------
+
 
 class TestUntestedSkill:
     def test_untested_skill_registered_without_caveat(self, adapter, tmp_path):
@@ -273,6 +277,7 @@ class TestUntestedSkill:
 # TestReturnValues
 # ---------------------------------------------------------------------------
 
+
 class TestReturnValues:
     def test_returns_one_result_per_skill(self, adapter, full_skill, partial_skill, tmp_path):
         results = adapter.register([full_skill, partial_skill], tmp_path)
@@ -296,6 +301,7 @@ class TestReturnValues:
 # TestUnregister
 # ---------------------------------------------------------------------------
 
+
 class TestUnregister:
     def test_unregister_removes_output_files(self, adapter, full_skill, tmp_path):
         adapter.register([full_skill], tmp_path)
@@ -312,6 +318,7 @@ class TestUnregister:
 # ---------------------------------------------------------------------------
 # TestBuildInstructionsMethod
 # ---------------------------------------------------------------------------
+
 
 class TestBuildInstructionsMethod:
     """build_instructions() returns the string without writing files."""
@@ -342,6 +349,7 @@ class TestBuildInstructionsMethod:
 # TestProtocolConformance
 # ---------------------------------------------------------------------------
 
+
 class TestProtocolConformance:
     def test_openai_agents_adapter_satisfies_skill_adapter_protocol(self, adapter):
         assert isinstance(adapter, SkillAdapter)
@@ -353,6 +361,7 @@ class TestProtocolConformance:
 # ---------------------------------------------------------------------------
 # TestRealSkillSamples
 # ---------------------------------------------------------------------------
+
 
 class TestRealSkillSamples:
     """Integration tests using the actual skill files from otaman-plugin."""

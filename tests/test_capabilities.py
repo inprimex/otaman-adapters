@@ -6,23 +6,24 @@ Covers:
 - Compliance declarations on each adapter
 - Backward compatibility: adding .capabilities does not break existing tests
 """
+
 from __future__ import annotations
 
 import pytest
 
 from otaman_adapters import (
     AdapterCapabilities,
-    DataClassification,
     ClaudeCodeAdapter,
-    OpenAIAgentsAdapter,
-    GeminiCliAdapter,
+    DataClassification,
     GeminiApiAdapter,
+    GeminiCliAdapter,
+    OpenAIAgentsAdapter,
 )
-
 
 # ---------------------------------------------------------------------------
 # DataClassification
 # ---------------------------------------------------------------------------
+
 
 class TestDataClassification:
     def test_all_five_values_present(self):
@@ -45,6 +46,7 @@ class TestDataClassification:
 # ---------------------------------------------------------------------------
 # AdapterCapabilities
 # ---------------------------------------------------------------------------
+
 
 class TestAdapterCapabilities:
     def test_for_levels_convenience_constructor(self):
@@ -86,6 +88,7 @@ class TestAdapterCapabilities:
 # ClaudeCodeAdapter compliance
 # ---------------------------------------------------------------------------
 
+
 class TestClaudeCodeAdapterCompliance:
     def test_has_capabilities_attribute(self):
         assert hasattr(ClaudeCodeAdapter, "capabilities")
@@ -120,6 +123,7 @@ class TestClaudeCodeAdapterCompliance:
 # ---------------------------------------------------------------------------
 # OpenAIAgentsAdapter compliance
 # ---------------------------------------------------------------------------
+
 
 class TestOpenAIAgentsAdapterCompliance:
     def test_has_capabilities_attribute(self):
@@ -157,6 +161,7 @@ class TestOpenAIAgentsAdapterCompliance:
 # GeminiCliAdapter compliance
 # ---------------------------------------------------------------------------
 
+
 class TestGeminiCliAdapterCompliance:
     def test_has_capabilities_attribute(self):
         assert hasattr(GeminiCliAdapter, "capabilities")
@@ -178,6 +183,7 @@ class TestGeminiCliAdapterCompliance:
 # GeminiApiAdapter compliance
 # ---------------------------------------------------------------------------
 
+
 class TestGeminiApiAdapterCompliance:
     def test_has_capabilities_attribute(self):
         assert hasattr(GeminiApiAdapter, "capabilities")
@@ -196,20 +202,19 @@ class TestGeminiApiAdapterCompliance:
 # Task 4.2 — backward compatibility
 # ---------------------------------------------------------------------------
 
+
 class TestBackwardCompatibility:
     """Adding .capabilities must not break any existing adapter behaviour."""
 
     def test_claude_code_register_still_works(self, tmp_path):
         """ClaudeCodeAdapter.register() is unaffected by the new capabilities attr."""
-        from otaman_adapters import Skill, CompatibilityLevel
-        from pathlib import Path
-        import yaml
 
         src = tmp_path / "my-skill" / "SKILL.md"
         src.parent.mkdir()
         src.write_text("---\nname: my-skill\ndescription: A skill.\n---\nbody\n")
 
         from otaman_adapters import load_skill
+
         skill = load_skill(src)
         results = ClaudeCodeAdapter().register([skill], tmp_path / "out")
         assert results[0].registered is True
@@ -219,6 +224,7 @@ class TestBackwardCompatibility:
         src.write_text("---\nname: my-skill\ndescription: A skill.\n---\nbody\n")
 
         from otaman_adapters import load_skill
+
         skill = load_skill(src)
         results = OpenAIAgentsAdapter().register([skill], tmp_path / "out")
         assert results[0].registered is True
@@ -232,5 +238,6 @@ class TestBackwardCompatibility:
 
     def test_existing_protocol_still_satisfied(self):
         from otaman_adapters import SkillAdapter
+
         assert isinstance(ClaudeCodeAdapter(), SkillAdapter)
         assert isinstance(OpenAIAgentsAdapter(), SkillAdapter)

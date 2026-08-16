@@ -16,11 +16,11 @@ definitions here with::
 and update the adapters' imports accordingly.  The dataclass field names and
 enum values are intentionally identical to the core definitions.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Sequence
 
 
 class DataClassification(str, Enum):
@@ -41,10 +41,10 @@ class DataClassification(str, Enum):
                  Typically requires on-premises or sovereignty-certified cloud.
     """
 
-    INTERNAL  = "internal"
+    INTERNAL = "internal"
     SENSITIVE = "sensitive"
-    PII       = "pii"
-    PHI       = "phi"
+    PII = "pii"
+    PHI = "phi"
     REGULATED = "regulated"
 
 
@@ -76,7 +76,7 @@ class AdapterCapabilities:
         cls,
         *levels: DataClassification,
         notes: str = "",
-    ) -> "AdapterCapabilities":
+    ) -> AdapterCapabilities:
         """Convenience constructor — pass levels as positional args."""
         return cls(compliance=tuple(levels), notes=notes)
 

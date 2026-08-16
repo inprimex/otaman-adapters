@@ -43,25 +43,29 @@ class ClaudeCodeAdapter:
             compat = skill.compatibility_for(_RUNTIME_ID)
 
             if compat == CompatibilityLevel.UNSUPPORTED:
-                results.append(RegistrationResult(
-                    skill_name=skill.name,
-                    registered=False,
-                    target_path=None,
-                    compatibility=compat,
-                    reason=f"provider_support[{_RUNTIME_ID}] = unsupported",
-                ))
+                results.append(
+                    RegistrationResult(
+                        skill_name=skill.name,
+                        registered=False,
+                        target_path=None,
+                        compatibility=compat,
+                        reason=f"provider_support[{_RUNTIME_ID}] = unsupported",
+                    )
+                )
                 continue
 
             try:
                 skill_dir = safe_child_path(skills_root, skill.name)
             except UnsafeSkillNameError as exc:
-                results.append(RegistrationResult(
-                    skill_name=skill.name,
-                    registered=False,
-                    target_path=None,
-                    compatibility=compat,
-                    reason=str(exc),
-                ))
+                results.append(
+                    RegistrationResult(
+                        skill_name=skill.name,
+                        registered=False,
+                        target_path=None,
+                        compatibility=compat,
+                        reason=str(exc),
+                    )
+                )
                 continue
 
             skill_dir.mkdir(parents=True, exist_ok=True)
@@ -73,23 +77,27 @@ class ClaudeCodeAdapter:
                     _inject_caveat(skill.source_path.read_text(encoding="utf-8"), caveat),
                     encoding="utf-8",
                 )
-                results.append(RegistrationResult(
-                    skill_name=skill.name,
-                    registered=True,
-                    target_path=dest,
-                    compatibility=compat,
-                    caveat=caveat,
-                ))
+                results.append(
+                    RegistrationResult(
+                        skill_name=skill.name,
+                        registered=True,
+                        target_path=dest,
+                        compatibility=compat,
+                        caveat=caveat,
+                    )
+                )
             else:
                 shutil.copy2(skill.source_path, dest)
                 # Copy any sibling assets (references/, etc.) the skill ships with.
                 _copy_siblings(skill.source_path.parent, skill_dir)
-                results.append(RegistrationResult(
-                    skill_name=skill.name,
-                    registered=True,
-                    target_path=dest,
-                    compatibility=compat,
-                ))
+                results.append(
+                    RegistrationResult(
+                        skill_name=skill.name,
+                        registered=True,
+                        target_path=dest,
+                        compatibility=compat,
+                    )
+                )
 
         return results
 
@@ -108,6 +116,7 @@ class ClaudeCodeAdapter:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _inject_caveat(content: str, caveat: str | None) -> str:
     """Append a [CAVEAT: …] note to the description field in frontmatter."""

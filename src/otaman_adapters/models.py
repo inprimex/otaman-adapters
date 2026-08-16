@@ -1,7 +1,6 @@
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Optional
 
 
 class CompatibilityLevel(str, Enum):
@@ -23,7 +22,7 @@ class Skill:
     def compatibility_for(self, runtime: str) -> CompatibilityLevel:
         return self.provider_support.get(runtime, CompatibilityLevel.FULL)
 
-    def notes_for(self, runtime: str) -> Optional[str]:
+    def notes_for(self, runtime: str) -> str | None:
         return self.provider_notes.get(runtime)
 
 
@@ -31,7 +30,7 @@ class Skill:
 class RegistrationResult:
     skill_name: str
     registered: bool
-    target_path: Optional[Path]
+    target_path: Path | None
     compatibility: CompatibilityLevel
-    caveat: Optional[str] = None
-    reason: Optional[str] = None
+    caveat: str | None = None
+    reason: str | None = None

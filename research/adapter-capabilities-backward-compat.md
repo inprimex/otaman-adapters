@@ -85,8 +85,10 @@ migration is a one-line import swap in `capabilities.py`:
 # Before (local stub):
 class DataClassification(str, Enum): ...
 
+
 @dataclass(frozen=True)
 class AdapterCapabilities: ...
+
 
 # After (once core ships):
 from otaman_core.routing import DataClassification, AdapterCapabilities

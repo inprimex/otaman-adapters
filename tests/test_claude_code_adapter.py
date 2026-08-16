@@ -15,35 +15,37 @@ loaded from the real otaman-plugin repo when it is present on disk (CI / dev
 environments with the full polyrepo checkout).  Synthetic SKILL.md fixtures
 cover all compatibility levels regardless of repo availability.
 """
+
 import textwrap
 from pathlib import Path
 
 import pytest
 import yaml
-
-from otaman_adapters import ClaudeCodeAdapter, CompatibilityLevel, load_skill
-from otaman_adapters.models import Skill
-
 from conftest import CTO_ADVISOR_PATH, KNOWLEDGE_CAPTURE_PATH, PROJECT_ESTIMATOR_PATH
 
+from otaman_adapters import ClaudeCodeAdapter, CompatibilityLevel, load_skill
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _write_skill(path: Path, name: str, description: str, extra_frontmatter: str = "") -> Path:
     skill_path = path / name / "SKILL.md"
     skill_path.parent.mkdir(parents=True, exist_ok=True)
     extra = ("\n" + extra_frontmatter.strip()) if extra_frontmatter.strip() else ""
-    skill_path.write_text(
-        f"---\nname: {name}\ndescription: \"{description}\"{extra}\n---\n\n# {name} body\nThis is the skill body.\n"
+    content = (
+        f'---\nname: {name}\ndescription: "{description}"{extra}\n---\n\n'
+        f"# {name} body\nThis is the skill body.\n"
     )
+    skill_path.write_text(content)
     return skill_path
 
 
 # ---------------------------------------------------------------------------
 # load_skill
 # ---------------------------------------------------------------------------
+
 
 class TestLoadSkill:
     def test_parses_name_and_description(self, tmp_path):
@@ -101,6 +103,7 @@ class TestLoadSkill:
 # ClaudeCodeAdapter — registration layout
 # ---------------------------------------------------------------------------
 
+
 class TestClaudeCodeAdapterLayout:
     def test_registered_skill_lands_at_expected_path(self, tmp_path):
         skill_path = _write_skill(tmp_path / "source", "alpha", "Alpha skill")
@@ -129,10 +132,7 @@ class TestClaudeCodeAdapterLayout:
 
     def test_multiple_skills_all_registered(self, tmp_path):
         src = tmp_path / "src"
-        skills = [
-            load_skill(_write_skill(src, f"skill-{i}", f"Skill {i}"))
-            for i in range(3)
-        ]
+        skills = [load_skill(_write_skill(src, f"skill-{i}", f"Skill {i}")) for i in range(3)]
         target = tmp_path / "plugin"
         results = ClaudeCodeAdapter().register(skills, target)
 
@@ -144,7 +144,7 @@ class TestClaudeCodeAdapterLayout:
         src = tmp_path / "src" / "with-refs"
         src.mkdir(parents=True)
         skill_path = src / "SKILL.md"
-        skill_path.write_text("---\nname: with-refs\ndescription: \"Has refs\"\n---\nbody\n")
+        skill_path.write_text('---\nname: with-refs\ndescription: "Has refs"\n---\nbody\n')
         refs = src / "references"
         refs.mkdir()
         (refs / "data.md").write_text("# data")
@@ -159,6 +159,7 @@ class TestClaudeCodeAdapterLayout:
 # ---------------------------------------------------------------------------
 # Unsupported skills are excluded
 # ---------------------------------------------------------------------------
+
 
 class TestUnsupportedSkill:
     def test_unsupported_skill_not_registered(self, tmp_path):
@@ -190,6 +191,7 @@ class TestUnsupportedSkill:
 # ---------------------------------------------------------------------------
 # Partial compatibility — caveat injection
 # ---------------------------------------------------------------------------
+
 
 class TestPartialCaveat:
     def test_partial_skill_is_registered(self, tmp_path):
@@ -245,6 +247,7 @@ class TestPartialCaveat:
 # Untested skills pass through unchanged
 # ---------------------------------------------------------------------------
 
+
 class TestUntestedSkill:
     def test_untested_skill_registered_without_modification(self, tmp_path):
         extra = "provider_support:\n  claude-code: untested\n"
@@ -264,6 +267,7 @@ class TestUntestedSkill:
 # ---------------------------------------------------------------------------
 # unregister
 # ---------------------------------------------------------------------------
+
 
 class TestUnregister:
     def test_unregister_removes_skill_dir(self, tmp_path):
@@ -286,15 +290,18 @@ class TestUnregister:
 # Protocol conformance
 # ---------------------------------------------------------------------------
 
+
 class TestProtocolConformance:
     def test_claude_code_adapter_satisfies_skill_adapter_protocol(self):
         from otaman_adapters.adapter import SkillAdapter
+
         assert isinstance(ClaudeCodeAdapter(), SkillAdapter)
 
 
 # ---------------------------------------------------------------------------
 # Spike: real skill samples from otaman-plugin
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.skipif(
     not CTO_ADVISOR_PATH.exists(),

@@ -1,4 +1,5 @@
 """Shared fixtures for otaman-adapters tests."""
+
 from pathlib import Path
 
 import pytest

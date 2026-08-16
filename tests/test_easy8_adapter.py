@@ -3,11 +3,12 @@
 Uses unittest.mock.patch to mock urllib.request.urlopen so no live network
 calls are made.
 """
+
 from __future__ import annotations
 
 import io
 import json
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -23,10 +24,10 @@ from otaman_adapters.easy8 import (
     resolve_pm_user_id,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_response(data: dict, status: int = 200) -> MagicMock:
     """Return a context-manager mock that looks like urllib.request.urlopen."""
@@ -52,6 +53,7 @@ def _make_empty_response(status: int = 204) -> MagicMock:
 # ---------------------------------------------------------------------------
 # EASY8_CAPABILITIES correctness
 # ---------------------------------------------------------------------------
+
 
 class TestEasy8Capabilities:
     def test_project_hierarchy_true(self):
@@ -104,6 +106,7 @@ class TestEasy8Capabilities:
 # Easy8Client — low-level HTTP
 # ---------------------------------------------------------------------------
 
+
 class TestEasy8Client:
     def test_get_sends_api_key_header(self):
         client = Easy8Client("https://example.com", "mykey")
@@ -123,8 +126,7 @@ class TestEasy8Client:
 
     def test_post_sends_json_body(self):
         client = Easy8Client("https://example.com", "k")
-        response = _make_response({"issue": {"id": 5, "subject": "test",
-                                              "project": {"id": 1}}})
+        response = _make_response({"issue": {"id": 5, "subject": "test", "project": {"id": 1}}})
         with patch("urllib.request.urlopen", return_value=response) as mock_open:
             client.post("/issues.json", {"issue": {"subject": "test"}})
         req = mock_open.call_args[0][0]
@@ -141,6 +143,7 @@ class TestEasy8Client:
 
     def test_raises_easy8_error_on_non_2xx(self):
         import urllib.error
+
         client = Easy8Client("https://example.com", "k")
         exc = urllib.error.HTTPError(
             url="https://example.com/issues.json",
@@ -160,6 +163,7 @@ class TestEasy8Client:
 # Easy8Adapter.capabilities
 # ---------------------------------------------------------------------------
 
+
 class TestAdapterCapabilities:
     def test_capabilities_returns_easy8_capabilities(self):
         adapter = Easy8Adapter("https://example.com", "k")
@@ -169,6 +173,7 @@ class TestAdapterCapabilities:
 # ---------------------------------------------------------------------------
 # Easy8Adapter.register_webhook — must make exactly 2 HTTP calls per event
 # ---------------------------------------------------------------------------
+
 
 class TestRegisterWebhook:
     def test_two_http_calls_per_event_single_event(self):
@@ -242,6 +247,7 @@ class TestRegisterWebhook:
 # Easy8Adapter.add_comment — must use PUT with notes field
 # ---------------------------------------------------------------------------
 
+
 class TestAddComment:
     def test_uses_put_not_post(self):
         adapter = Easy8Adapter("https://es.example.com", "apikey")
@@ -282,6 +288,7 @@ class TestAddComment:
 # ---------------------------------------------------------------------------
 # Easy8Adapter.handle_inbound_event — payload parsing
 # ---------------------------------------------------------------------------
+
 
 class TestHandleInboundEvent:
     def test_parses_action_as_event_type(self):
@@ -350,6 +357,7 @@ class TestHandleInboundEvent:
 # Easy8Adapter.list_statuses
 # ---------------------------------------------------------------------------
 
+
 class TestListStatuses:
     def test_parses_statuses(self):
         adapter = Easy8Adapter("https://es.example.com", "apikey")
@@ -372,6 +380,7 @@ class TestListStatuses:
 # Easy8Adapter.list_priorities
 # ---------------------------------------------------------------------------
 
+
 class TestListPriorities:
     def test_parses_priorities(self):
         adapter = Easy8Adapter("https://es.example.com", "apikey")
@@ -392,6 +401,7 @@ class TestListPriorities:
 # Easy8Adapter.set_project_map
 # ---------------------------------------------------------------------------
 
+
 class TestSetProjectMap:
     def test_stores_project_map(self):
         adapter = Easy8Adapter("https://es.example.com", "apikey")
@@ -411,37 +421,51 @@ class TestSetProjectMap:
 # Easy8Adapter.create_issue — Mode C prefix + tracker_id
 # ---------------------------------------------------------------------------
 
+
 class TestCreateIssue:
     def _tracker_resp(self):
         return _make_response({"trackers": [{"id": 3, "name": "Task"}, {"id": 4, "name": "Bug"}]})
 
     def _priority_resp(self):
-        return _make_response({"issue_priorities": [{"id": 2, "name": "Normal"}, {"id": 3, "name": "High"}]})
+        return _make_response(
+            {"issue_priorities": [{"id": 2, "name": "Normal"}, {"id": 3, "name": "High"}]}
+        )
 
     def _custom_fields_resp(self):
         return _make_response({"custom_fields": []})
 
     def _issue_resp(self, subject="[core-agent] My issue"):
-        return _make_response({
-            "issue": {
-                "id": 100,
-                "subject": subject,
-                "project": {"id": 1},
-                "status": {"name": "New"},
-                "priority": {"name": "Normal"},
-                "custom_fields": [],
+        return _make_response(
+            {
+                "issue": {
+                    "id": 100,
+                    "subject": subject,
+                    "project": {"id": 1},
+                    "status": {"name": "New"},
+                    "priority": {"name": "Normal"},
+                    "custom_fields": [],
+                }
             }
-        })
+        )
 
     def _responses(self, issue_resp=None):
         """Standard 4-call sequence: tracker, priority, custom_fields, issue."""
-        return [self._tracker_resp(), self._priority_resp(), self._custom_fields_resp(), issue_resp or self._issue_resp()]
+        return [
+            self._tracker_resp(),
+            self._priority_resp(),
+            self._custom_fields_resp(),
+            issue_resp or self._issue_resp(),
+        ]
 
     def test_mode_c_title_prefix(self):
         """Issue subject must start with [<agent-name>]."""
         adapter = Easy8Adapter("https://es.example.com", "apikey")
-        with patch("urllib.request.urlopen", side_effect=self._responses(self._issue_resp("[core-agent] My issue"))) as mock_open:
+        with patch(
+            "urllib.request.urlopen",
+            side_effect=self._responses(self._issue_resp("[core-agent] My issue")),
+        ) as mock_open:
             from otaman_adapters.easy8 import SpecChange
+
             sc = SpecChange(title="My issue", agent_name="core-agent")
             adapter.create_issue(sc)
 
@@ -454,6 +478,7 @@ class TestCreateIssue:
         adapter = Easy8Adapter("https://es.example.com", "apikey")
         with patch("urllib.request.urlopen", side_effect=self._responses()) as mock_open:
             from otaman_adapters.easy8 import SpecChange
+
             sc = SpecChange(title="My issue", agent_name="core-agent")
             adapter.create_issue(sc)
 
@@ -466,6 +491,7 @@ class TestCreateIssue:
         adapter = Easy8Adapter("https://es.example.com", "apikey")
         with patch("urllib.request.urlopen", side_effect=self._responses()) as mock_open:
             from otaman_adapters.easy8 import SpecChange
+
             sc = SpecChange(title="My issue", agent_name="core-agent")
             adapter.create_issue(sc)
 
@@ -477,6 +503,7 @@ class TestCreateIssue:
         adapter = Easy8Adapter("https://es.example.com", "apikey")
         with patch("urllib.request.urlopen", side_effect=self._responses()) as mock_open:
             from otaman_adapters.easy8 import SpecChange
+
             sc = SpecChange(title="Spec", agent_name="spec-agent")
             adapter.create_issue(sc)
 
@@ -487,15 +514,28 @@ class TestCreateIssue:
     def test_tracker_id_skipped_when_tracker_resolution_fails(self):
         """If tracker list endpoint fails, issue is still created without tracker_id."""
         import urllib.error
+
         adapter = Easy8Adapter("https://es.example.com", "apikey")
         tracker_exc = urllib.error.HTTPError(
             url="https://es.example.com/trackers.json",
-            code=403, msg="Forbidden", hdrs=MagicMock(), fp=MagicMock(),
+            code=403,
+            msg="Forbidden",
+            hdrs=MagicMock(),
+            fp=MagicMock(),
         )
         tracker_exc.read = lambda: b""
 
-        with patch("urllib.request.urlopen", side_effect=[tracker_exc, self._priority_resp(), self._custom_fields_resp(), self._issue_resp()]) as mock_open:
+        with patch(
+            "urllib.request.urlopen",
+            side_effect=[
+                tracker_exc,
+                self._priority_resp(),
+                self._custom_fields_resp(),
+                self._issue_resp(),
+            ],
+        ) as mock_open:
             from otaman_adapters.easy8 import SpecChange
+
             sc = SpecChange(title="T", agent_name="a")
             result = adapter.create_issue(sc)
 
@@ -507,15 +547,28 @@ class TestCreateIssue:
     def test_priority_id_skipped_when_resolution_fails(self):
         """If priority endpoint fails, issue is still created without priority_id."""
         import urllib.error
+
         adapter = Easy8Adapter("https://es.example.com", "apikey")
         priority_exc = urllib.error.HTTPError(
             url="https://es.example.com/enumerations/issue_priorities.json",
-            code=403, msg="Forbidden", hdrs=MagicMock(), fp=MagicMock(),
+            code=403,
+            msg="Forbidden",
+            hdrs=MagicMock(),
+            fp=MagicMock(),
         )
         priority_exc.read = lambda: b""
 
-        with patch("urllib.request.urlopen", side_effect=[self._tracker_resp(), priority_exc, self._custom_fields_resp(), self._issue_resp()]) as mock_open:
+        with patch(
+            "urllib.request.urlopen",
+            side_effect=[
+                self._tracker_resp(),
+                priority_exc,
+                self._custom_fields_resp(),
+                self._issue_resp(),
+            ],
+        ) as mock_open:
             from otaman_adapters.easy8 import SpecChange
+
             sc = SpecChange(title="T", agent_name="a")
             result = adapter.create_issue(sc)
 
@@ -528,6 +581,7 @@ class TestCreateIssue:
 # ---------------------------------------------------------------------------
 # Easy8McpClient
 # ---------------------------------------------------------------------------
+
 
 class TestEasy8McpClient:
     def test_posts_to_mcp_endpoint(self):
@@ -567,11 +621,14 @@ class TestEasy8McpClient:
 
     def test_raises_easy8_error_on_http_error(self):
         import urllib.error
+
         client = Easy8McpClient("https://es.example.com", "k")
         exc = urllib.error.HTTPError(
             url="https://es.example.com/mcp",
-            code=500, msg="Internal Server Error",
-            hdrs=MagicMock(), fp=io.BytesIO(b"server error"),
+            code=500,
+            msg="Internal Server Error",
+            hdrs=MagicMock(),
+            fp=io.BytesIO(b"server error"),
         )
         with patch("urllib.request.urlopen", side_effect=exc):
             with pytest.raises(Easy8Error) as exc_info:
@@ -582,6 +639,7 @@ class TestEasy8McpClient:
 # ---------------------------------------------------------------------------
 # Easy8Adapter.get_users
 # ---------------------------------------------------------------------------
+
 
 class TestGetUsers:
     def test_returns_users_list(self):
@@ -606,10 +664,14 @@ class TestGetUsers:
 
     def test_raises_easy8_error_on_http_failure(self):
         import urllib.error
+
         adapter = Easy8Adapter("https://es.example.com", "apikey")
         exc = urllib.error.HTTPError(
             url="https://es.example.com/users.json",
-            code=403, msg="Forbidden", hdrs=MagicMock(), fp=io.BytesIO(b"forbidden"),
+            code=403,
+            msg="Forbidden",
+            hdrs=MagicMock(),
+            fp=io.BytesIO(b"forbidden"),
         )
         with patch("urllib.request.urlopen", side_effect=exc):
             with pytest.raises(Easy8Error):
@@ -617,7 +679,9 @@ class TestGetUsers:
 
     def test_calls_users_json_endpoint(self):
         adapter = Easy8Adapter("https://es.example.com", "apikey")
-        with patch("urllib.request.urlopen", return_value=_make_response({"users": []})) as mock_open:
+        with patch(
+            "urllib.request.urlopen", return_value=_make_response({"users": []})
+        ) as mock_open:
             adapter.get_users()
         req = mock_open.call_args[0][0]
         assert "/users.json" in req.full_url
@@ -627,6 +691,7 @@ class TestGetUsers:
 # ---------------------------------------------------------------------------
 # resolve_pm_user_id
 # ---------------------------------------------------------------------------
+
 
 class TestResolvePmUserId:
     _users = [
@@ -655,7 +720,7 @@ class TestResolvePmUserId:
         """When email matches user 2 but name matches user 1, email wins."""
         adapter = self._adapter_with_users()
         entry = HumanRosterEntry(
-            name="Roman Starikov",   # matches user 1 by name
+            name="Roman Starikov",  # matches user 1 by name
             email="alice@example.com",  # matches user 2 by email
             roles=["cofounder"],
         )
@@ -692,17 +757,20 @@ class TestResolvePmUserId:
 # _resolve_custom_field_ids + create_issue rich payload (tasks 4.1–4.3)
 # ---------------------------------------------------------------------------
 
+
 class TestCustomFieldCache:
     def _issue_resp(self):
-        return _make_response({
-            "issue": {
-                "id": 55,
-                "subject": "[a] T",
-                "project": {"id": 1},
-                "status": {"name": "New"},
-                "custom_fields": [],
+        return _make_response(
+            {
+                "issue": {
+                    "id": 55,
+                    "subject": "[a] T",
+                    "project": {"id": 1},
+                    "status": {"name": "New"},
+                    "custom_fields": [],
+                }
             }
-        })
+        )
 
     def _std_pre_resps(self):
         """tracker + priority before the custom_fields call."""
@@ -714,12 +782,14 @@ class TestCustomFieldCache:
     def test_platform_custom_fields_bypasses_http(self):
         """When platform_custom_fields is injected, no GET /custom_fields.json is made."""
         adapter = Easy8Adapter(
-            "https://es.example.com", "k",
+            "https://es.example.com",
+            "k",
             platform_custom_fields={"jtbd-id": 10, "otaman-agent": 11, "spec-path": 12},
         )
         resps = self._std_pre_resps() + [self._issue_resp()]
         with patch("urllib.request.urlopen", side_effect=resps) as mock_open:
             from otaman_adapters.easy8 import SpecChange
+
             sc = SpecChange(title="T", agent_name="a", spec_path="s/p", jtbd_id="J-1")
             adapter.create_issue(sc)
 
@@ -734,15 +804,20 @@ class TestCustomFieldCache:
     def test_custom_fields_fetched_from_api(self):
         """When no platform_custom_fields, GET /custom_fields.json populates the cache."""
         adapter = Easy8Adapter("https://es.example.com", "k")
-        cf_resp = _make_response({"custom_fields": [
-            {"id": 7, "name": "jtbd-id", "customized_type": "issue"},
-            {"id": 8, "name": "otaman-agent", "customized_type": "issue"},
-            {"id": 9, "name": "spec-path", "customized_type": "issue"},
-            {"id": 99, "name": "unrelated", "customized_type": "project"},
-        ]})
+        cf_resp = _make_response(
+            {
+                "custom_fields": [
+                    {"id": 7, "name": "jtbd-id", "customized_type": "issue"},
+                    {"id": 8, "name": "otaman-agent", "customized_type": "issue"},
+                    {"id": 9, "name": "spec-path", "customized_type": "issue"},
+                    {"id": 99, "name": "unrelated", "customized_type": "project"},
+                ]
+            }
+        )
         resps = self._std_pre_resps() + [cf_resp, self._issue_resp()]
         with patch("urllib.request.urlopen", side_effect=resps) as mock_open:
             from otaman_adapters.easy8 import SpecChange
+
             sc = SpecChange(title="T", agent_name="ag", spec_path="p/q", jtbd_id="J-2")
             adapter.create_issue(sc)
 
@@ -756,7 +831,8 @@ class TestCustomFieldCache:
     def test_cache_hit_skips_second_http_call(self):
         """Second create_issue call reuses all caches — only the POST is made."""
         adapter = Easy8Adapter(
-            "https://es.example.com", "k",
+            "https://es.example.com",
+            "k",
             platform_custom_fields={"jtbd-id": 5},
         )
         # First call: tracker + priority + POST (custom_fields skipped via platform_custom_fields)
@@ -764,6 +840,7 @@ class TestCustomFieldCache:
         resps = self._std_pre_resps() + [self._issue_resp(), self._issue_resp()]
         with patch("urllib.request.urlopen", side_effect=resps) as mock_open:
             from otaman_adapters.easy8 import SpecChange
+
             sc = SpecChange(title="T", agent_name="a")
             adapter.create_issue(sc)
             adapter.create_issue(sc)
@@ -779,6 +856,7 @@ class TestCustomFieldCache:
         resps = self._std_pre_resps() + [cf_resp, self._issue_resp()]
         with patch("urllib.request.urlopen", side_effect=resps):
             from otaman_adapters.easy8 import SpecChange
+
             sc = SpecChange(title="T", agent_name="a")
             result = adapter.create_issue(sc)
 
@@ -790,6 +868,7 @@ class TestCustomFieldCache:
         resps = self._std_pre_resps() + [_make_response({"custom_fields": []}), self._issue_resp()]
         with patch("urllib.request.urlopen", side_effect=resps) as mock_open:
             from otaman_adapters.easy8 import SpecChange
+
             sc = SpecChange(title="T", agent_name="a", description="Full proposal text here.")
             adapter.create_issue(sc)
 
@@ -802,6 +881,7 @@ class TestCustomFieldCache:
         resps = self._std_pre_resps() + [_make_response({"custom_fields": []}), self._issue_resp()]
         with patch("urllib.request.urlopen", side_effect=resps) as mock_open:
             from otaman_adapters.easy8 import SpecChange
+
             sc = SpecChange(title="T", agent_name="a")
             adapter.create_issue(sc)
 
@@ -811,7 +891,8 @@ class TestCustomFieldCache:
     def test_platform_custom_fields_constructor_kwarg(self):
         """platform_custom_fields kwarg is stored on the adapter."""
         adapter = Easy8Adapter(
-            "https://es.example.com", "k",
+            "https://es.example.com",
+            "k",
             platform_custom_fields={"jtbd-id": 42},
         )
         assert adapter._platform_custom_fields == {"jtbd-id": 42}

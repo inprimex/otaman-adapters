@@ -25,10 +25,10 @@ definition in `otaman-router-v1-design/research/data-classification-levels.md`.
 
 ```python
 class DataClassification(str, Enum):
-    INTERNAL  = "internal"   # non-public, no regulatory label
+    INTERNAL = "internal"  # non-public, no regulatory label
     SENSITIVE = "sensitive"  # NDA / contractual confidentiality
-    PII       = "pii"        # GDPR/CCPA — requires DPA
-    PHI       = "phi"        # HIPAA — requires BAA
+    PII = "pii"  # GDPR/CCPA — requires DPA
+    PHI = "phi"  # HIPAA — requires BAA
     REGULATED = "regulated"  # PCI-DSS, ITAR/EAR, sovereign data
 ```
 
@@ -62,7 +62,7 @@ capabilities = AdapterCapabilities.for_levels(
     DataClassification.INTERNAL,
     DataClassification.SENSITIVE,
     notes="Default: Anthropic API (no BAA). INTERNAL + SENSITIVE cleared. "
-          "PHI/REGULATED require Bedrock-Anthropic with AWS BAA (EE, operator-configured)."
+    "PHI/REGULATED require Bedrock-Anthropic with AWS BAA (EE, operator-configured).",
 )
 ```
 
@@ -90,8 +90,8 @@ capabilities = AdapterCapabilities.for_levels(
     DataClassification.INTERNAL,
     DataClassification.SENSITIVE,
     notes="Default: plain OpenAI API (api.openai.com, no BAA). "
-          "INTERNAL + SENSITIVE cleared. PHI/REGULATED require Azure OpenAI "
-          "with a Microsoft BAA (operator-configured, not default)."
+    "INTERNAL + SENSITIVE cleared. PHI/REGULATED require Azure OpenAI "
+    "with a Microsoft BAA (operator-configured, not default).",
 )
 ```
 
@@ -132,8 +132,8 @@ capabilities = AdapterCapabilities.for_levels(
     DataClassification.INTERNAL,
     DataClassification.SENSITIVE,
     notes="Default: Google Cloud Gemini API (no HIPAA BAA at standard tier). "
-          "INTERNAL + SENSITIVE cleared. PHI/REGULATED require Google Cloud "
-          "Healthcare-certified deployment (operator-configured, not default)."
+    "INTERNAL + SENSITIVE cleared. PHI/REGULATED require Google Cloud "
+    "Healthcare-certified deployment (operator-configured, not default).",
 )
 ```
 
@@ -157,8 +157,8 @@ capabilities = AdapterCapabilities.for_levels(
     DataClassification.INTERNAL,
     DataClassification.SENSITIVE,
     notes="Default: google-generativeai SDK (no HIPAA BAA at standard tier). "
-          "INTERNAL + SENSITIVE cleared. PHI/REGULATED require Vertex AI on a "
-          "Google Cloud Healthcare-certified project (operator-configured)."
+    "INTERNAL + SENSITIVE cleared. PHI/REGULATED require Vertex AI on a "
+    "Google Cloud Healthcare-certified project (operator-configured).",
 )
 ```
 
