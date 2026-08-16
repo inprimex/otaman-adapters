@@ -1,5 +1,7 @@
 # otaman-adapters
 
+> **Otaman platform:** [otaman-core](https://github.com/inprimex/otaman-core) · [otaman-cli](https://github.com/inprimex/otaman-cli) · [otaman-plugin](https://github.com/inprimex/otaman-plugin) · [otaman-bridge](https://github.com/inprimex/otaman-bridge) · [otaman-runner](https://github.com/inprimex/otaman-runner) · **otaman-adapters (you are here)**
+
 Harness drivers for Otaman — one subpackage per supported AI coding runtime,
 translating between the Adapter Protocol and each harness's native skill
 registration and event format.
