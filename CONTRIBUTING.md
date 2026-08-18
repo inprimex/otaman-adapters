@@ -59,5 +59,3 @@ See [otaman-meta CLA templates](https://github.com/inprimex/otaman-meta/tree/mai
 - For licensing questions, contact: licensing@inprimex.com
 
 Thank you for contributing to Otaman!
-
-<!-- CLA workflow smoke test — this file/PR is a throwaway to verify CLA Assistant resolves the otaman-deploy reusable workflow post-public-flip. Safe to close/delete. -->

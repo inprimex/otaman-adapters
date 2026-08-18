@@ -1,6 +1,7 @@
-# CLA caller — copy verbatim to .github/workflows/cla.yml in each CE repo.
-# All logic lives in the reusable workflow in otaman-deploy; see
-# otaman-deploy/docs/cla/README.md for the rollout runbook.
+# CLA caller — thin wrapper; all logic lives in the shared reusable workflow.
+# Reusable workflow home: PUBLIC repo inprimex/.github (a public repo cannot
+# resolve a reusable workflow stored in a private repo, so it lives here).
+# Pinned to a full commit SHA per supply-chain doctrine (F182), not a branch.
 # Requires repo secret CLA_SIGNATURES_TOKEN (PAT scoped to inprimex/cla-signatures).
 name: cla
 
@@ -12,6 +13,6 @@ on:
 
 jobs:
   cla:
-    uses: inprimex/otaman-deploy/.github/workflows/cla.yml@main
+    uses: inprimex/.github/.github/workflows/cla.yml@5c6a9d7ab58854b0dec4a650550431616e5f652f
     secrets:
       CLA_SIGNATURES_TOKEN: ${{ secrets.CLA_SIGNATURES_TOKEN }}
