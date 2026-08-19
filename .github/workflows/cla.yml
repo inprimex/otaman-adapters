@@ -13,6 +13,16 @@ on:
 
 jobs:
   cla:
+    # This repo's default workflow token is read-only. The reusable workflow's
+    # job requests write scopes (a called workflow cannot exceed the caller's
+    # token), so the caller must grant them explicitly here — least-privilege,
+    # matching exactly what CLA Assistant needs. Without this the reusable
+    # workflow fails at startup ("requesting 'X: write', only allowed 'X: none'").
+    permissions:
+      actions: write
+      contents: read
+      pull-requests: write
+      statuses: write
     uses: inprimex/.github/.github/workflows/cla.yml@5c6a9d7ab58854b0dec4a650550431616e5f652f
     secrets:
       CLA_SIGNATURES_TOKEN: ${{ secrets.CLA_SIGNATURES_TOKEN }}
