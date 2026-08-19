@@ -1,9 +1,8 @@
-# Adapter Compliance Declarations — task 4.1
+# Adapter Compliance Declarations
 
-**Author**: adapters-agent
-**Date**: 2026-05-27
-**Change**: otaman-router-v1-design
-**Branch**: `agent/adapters-agent/router-v1-compliance-capabilities`
+Each Otaman adapter declares an `AdapterCapabilities` object describing which
+data-classification tiers its *default* backend configuration is certified to
+handle. This document explains those declarations and their rationale.
 
 ---
 
@@ -20,8 +19,8 @@ backend configuration is certified to handle.  The router's compliance rule
 
 ### `DataClassification` (local stub → `otaman_core.routing`)
 
-`src/otaman_adapters/capabilities.py` defines a local copy mirroring the
-definition in `otaman-router-v1-design/research/data-classification-levels.md`.
+`src/otaman_adapters/capabilities.py` defines a local copy that mirrors the
+canonical data-classification levels used by the platform's routing layer.
 
 ```python
 class DataClassification(str, Enum):
@@ -98,7 +97,7 @@ capabilities = AdapterCapabilities.for_levels(
 **Cleared**: `INTERNAL`, `SENSITIVE`
 **Not cleared by default**: `PII`, `PHI`, `REGULATED`
 
-**Updated 2026-07-03 (F136 fix)**: this declaration previously listed `PHI`
+**Note on a prior correction**: this declaration previously listed `PHI`
 and `REGULATED` as cleared, reflecting the *maximum achievable* posture if an
 operator configured Azure OpenAI + a Microsoft BAA. That was inconsistent with
 every other adapter's default-posture convention and with `AdapterCapabilities`'s
@@ -116,10 +115,10 @@ plain `api.openai.com` backend with no BAA. Narrowed to match
   PCI-DSS Level 1 / FedRAMP High / ISO 27001 / SOC 2 certifications can cover
   `REGULATED` workloads — but this requires an operator to configure an Azure
   OpenAI endpoint, which is not this adapter's default deployment. Per the
-  `otaman-router-v1-design` routing-policy spec, that escalation is meant to
-  be expressed as a per-backend `compliance: [...]` override in `routing.yaml`
-  (router-owned), layered on top of this adapter-level default — not a
-  static class attribute here.
+  router's routing-policy design, that escalation is meant to be expressed as a
+  per-backend `compliance: [...]` override in `routing.yaml` (router-owned),
+  layered on top of this adapter-level default — not a static class attribute
+  here.
 - `PII` remains undeclared for the same reason as before: no default backend
   in this table offers a GDPR DPA at standard tier.
 
@@ -197,7 +196,7 @@ adapter's static default declaration.
 - The `SkillAdapter` Protocol is NOT updated to require `capabilities` — this
   is a forward-compatible addition.  Once `otaman-core` publishes
   `AdapterCapabilities` and the router starts reading it, the Protocol will be
-  extended in `otaman-core` (core-agent task 1.4).
+  extended in `otaman-core`.
 
 ---
 

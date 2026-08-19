@@ -27,7 +27,7 @@ same text-generation approach as ``OpenAIAgentsAdapter``).
 
 ## Known Gemini-specific limitations
 
-See ``research/gemini-adapter-limitations.md`` for the full analysis.
+See ``docs/gemini-adapter-limitations.md`` for the full analysis.
 Summary:
 
 | Capability | Gemini CLI | Gemini API |

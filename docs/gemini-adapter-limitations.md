@@ -1,8 +1,9 @@
-# Gemini Adapter — Limitations Research Note
+# Gemini Adapter — Limitations
 
-**Date**: 2026-05-27
-**Branch**: `agent/adapters-agent/spike-gemini-adapter`
-**Task**: 1.6 — per-project-skill-management (lower priority)
+Capability and compatibility notes for the two Gemini-family runtimes
+(Gemini CLI and Gemini API) and how Otaman skills map onto each. The Gemini
+adapters in `gemini.py` are drafts; this document records what maps cleanly and
+where the runtime constraints are.
 
 ---
 
@@ -68,15 +69,15 @@ Adapter: `GeminiApiAdapter` (wraps the same instructions-block logic as `OpenAIA
 | Web grounding | ⚠️ Partial | `partial` | Google Search grounding available but requires specific API config; not all skill invocation patterns are compatible |
 
 **Default compatibility for skills not declaring `provider_support:`**: `full`.
-However, skills that rely on on-demand body loading (Q3 resolution: bodies loaded
-on activation, not at session start) will behave differently — the body must
+However, skills that rely on on-demand body loading (bodies loaded on
+activation, not at session start) will behave differently — the body must
 either be included in the system instruction at startup or passed in the user turn.
 
 ---
 
-## Skill body loading (Q3) compatibility gap — Gemini API
+## Skill body loading compatibility gap — Gemini API
 
-The Q3 resolution specifies:
+Otaman's skill-loading model is:
 > Descriptions in system prompt at session start; bodies on-demand
 
 Claude Code and Gemini CLI both support this natively (the runtime controls when
@@ -89,7 +90,8 @@ no equivalent of "load skill body when triggered."  For Gemini API:
   cost, requires runner-side logic to detect activation and inject body).
 
 Recommendation: the `GeminiApiAdapter` generates instructions block with descriptions
-only (consistent with Q3).  The runner that consumes `SKILL_INSTRUCTIONS` is
+only (consistent with the descriptions-at-startup / bodies-on-demand model).  The
+runner that consumes `SKILL_INSTRUCTIONS` is
 responsible for on-demand body injection if needed.  Add a `body_for(skill_name) -> str`
 helper to `skills_block.py` in a follow-on implementation change.
 
@@ -141,7 +143,8 @@ A production implementation would:
 1. Write tests mirroring `test_claude_code_adapter.py` and `test_openai_agents_adapter.py`
 2. Run live activation against a Gemini CLI session and a Gemini API call
 3. Handle Gemini CLI's specific plugin directory path convention (TBD — check Gemini CLI docs)
-4. Add `body_for(skill_name)` to `GeminiApiAdapter.build_instructions()` output for Q3
+4. Add `body_for(skill_name)` to `GeminiApiAdapter.build_instructions()` output for
+   on-demand body loading
 
 ---
 
@@ -159,5 +162,4 @@ A follow-on refactor could extract:
 - `SkillMdFileAdapter(runtime_id)` — base class for file-based adapters
 - `InstructionInjectionAdapter(runtime_id)` — base class for instruction adapters
 
-This is deferred to the `skill-runtime-registration-adapters-v0` implementation
-change (task 5.2, blocked on 5.1).
+This is deferred to a future adapter-implementation change.
