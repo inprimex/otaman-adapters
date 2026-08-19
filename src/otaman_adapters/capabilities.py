@@ -26,8 +26,8 @@ from enum import Enum
 class DataClassification(str, Enum):
     """Ordered sensitivity tiers for data handled in a task.
 
-    Mirrors ``otaman_core.routing.DataClassification`` (research doc:
-    ``otaman-router-v1-design/research/data-classification-levels.md``).
+    Mirrors ``otaman_core.routing.DataClassification`` (the canonical
+    data-classification levels used by the platform's routing layer).
 
     INTERNAL   — non-public data with no regulatory label; suitable for any
                  backend the operator has vetted.

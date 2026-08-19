@@ -1,8 +1,8 @@
-# Activation Verification — OpenAI Agents SDK Adapter Spike
+# OpenAI Agents SDK Adapter — Behavior & Verification
 
-**Date**: 2026-05-27
-**Branch**: `agent/adapters-agent/spike-openai-agents-adapter`
-**Task**: 1.5 — per-project-skill-management
+How `OpenAIAgentsAdapter` registers SKILL.md skills for the OpenAI Agents SDK
+runtime via instruction injection, and how that registration is verified (by the
+automated test suite and by inspecting the generated instructions block).
 
 ---
 
@@ -23,7 +23,7 @@ the generated instructions block can activate them.
 | `project-estimator` | `otaman-plugin/skills/project-estimator/SKILL.md` | No | `full` |
 
 All three conform to SKILL.md verbatim.  None declare `provider_support:`, which
-defaults to `full` for all SKILL.md-reading runtimes (per Q5 resolution).
+defaults to `full` for all SKILL.md-reading runtimes.
 
 ---
 
@@ -232,9 +232,9 @@ section in SKILL.md.
 ### 4. Instructions block size is reasonable
 
 2 503 characters for 3 skills at `full` compatibility.  At ~4 chars/token this is ~625
-tokens for descriptions-only at session start (consistent with Q3 resolution: full body
-loaded on-demand).  Scales linearly with skill count — per-project scoping (Q2) limits
-the active set to keep token overhead bounded.
+tokens for descriptions-only at session start (full body loaded on-demand).  Scales
+linearly with skill count — per-project skill scoping limits the active set to keep
+token overhead bounded.
 
 ### 5. `.py` output enables seamless integration with existing OpenAI tooling
 
@@ -246,8 +246,8 @@ without any Otaman-specific dependencies in the runner process.
 
 The identical `cto-advisor`, `knowledge-capture`, `project-estimator` skills work through
 both `ClaudeCodeAdapter` and `OpenAIAgentsAdapter` without modification.  This confirms
-the Q4 direction: **SKILL.md is universal; the adapter handles runtime-specific
-registration mechanics**.
+the core design direction: **SKILL.md is universal; the adapter handles
+runtime-specific registration mechanics**.
 
 ---
 
@@ -255,7 +255,7 @@ registration mechanics**.
 
 - **Live OpenAI API run** not yet performed — procedure documented above.
 - **`provider_support: openai-agents` annotations** not yet added to existing skills —
-  deferred to `skill-runtime-registration-adapters-v0` (task 5.2, blocked on 5.1).
+  deferred to a future adapter-implementation change.
 - **File-tool restriction** (`partial` caveat) not yet modeled on real skills —
   will be validated when skills that use file system operations are created.
-- **Active-set integration** with the session-spawn mechanism is deferred to 5.1/5.2.
+- **Active-set integration** with the session-spawn mechanism is future work.

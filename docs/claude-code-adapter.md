@@ -1,8 +1,8 @@
-# Activation Verification — Claude Code Adapter Spike
+# Claude Code Adapter — Behavior & Verification
 
-**Date**: 2026-05-25
-**Branch**: `agent/adapters-agent/spike-claude-code-adapter`
-**Task**: 1.4 — per-project-skill-management
+How `ClaudeCodeAdapter` registers SKILL.md skills for the Claude Code runtime,
+and how that registration is verified (both by the automated test suite and by a
+live activation run).
 
 ---
 
@@ -22,9 +22,9 @@ Verify that `ClaudeCodeAdapter` correctly registers three sample SKILL.md skills
 | `project-estimator` | `otaman-plugin/skills/project-estimator/SKILL.md` | No | `full` |
 
 All three conform to SKILL.md verbatim.  None declare `provider_support:`, which
-defaults to `full` for all SKILL.md-reading runtimes (per Q5 resolution: a skill with
-no `provider_support:` is implicitly `full` for every SKILL.md-reading runtime,
-including `claude-code`).
+defaults to `full` for all SKILL.md-reading runtimes: a skill with no
+`provider_support:` is implicitly `full` for every SKILL.md-reading runtime,
+including `claude-code`.
 
 ---
 
@@ -107,7 +107,7 @@ claude --plugin-dir /tmp/spike-claude-code-test/plugin
 **Expected results**:
 - `/skills` lists `cto-advisor`, `knowledge-capture`, `project-estimator`
 - Each skill triggers on its natural-language cue
-- Skill body loads on activation (descriptions in system prompt; bodies on-demand per Q3)
+- Skill body loads on activation (descriptions in system prompt; bodies on-demand)
 
 **Status**: ✅ **COMPLETE** (live run executed 2026-05-27 in a Claude Code session).
 
@@ -144,7 +144,7 @@ reader handles the activation — no adapter-side logic is needed there.
 
 ### 1. Adapter scope is narrow (~180 LOC total)
 
-The Q4 resolution proved correct: because Claude Code already reads SKILL.md natively,
+As expected, because Claude Code already reads SKILL.md natively,
 the adapter's entire job is file placement + caveat injection.  There is no format
 translation.  The implementation is `models.py` (32 LOC), `loader.py` (36 LOC),
 `adapter.py` (26 LOC), `claude_code.py` (86 LOC).
@@ -153,7 +153,7 @@ translation.  The implementation is `models.py` (32 LOC), `loader.py` (36 LOC),
 
 All 3 sample skills loaded without modification.  The existing Otaman skill catalog
 (`otaman-plugin/skills/`) is SKILL.md-conformant as-is.  The `provider_support:`
-field is absent (correct per Q5: omission = `full` for SKILL.md-reading runtimes).
+field is absent (omission = `full` for SKILL.md-reading runtimes).
 
 ### 3. Sibling asset copying is needed
 
@@ -178,10 +178,8 @@ implement.
 
 ## Open items
 
-- **Live session run** ✅ completed 2026-05-27.  See updated status above.
 - **`provider_support:` additions to existing skills** are not yet authored —
-  will be done during the `skill-runtime-registration-adapters-v0` implementation
-  change (task 5.2, blocked on 5.1).
-- **Active-set resolution** (per-project scoping per Q2/Q3) is not wired yet — the
-  adapter currently takes a caller-supplied skill list.  The integration with the
-  spawn-decision component is the 5.1/5.2 implementation work.
+  deferred to a future adapter-implementation change.
+- **Active-set resolution** (per-project skill scoping) is not wired yet — the
+  adapter currently takes a caller-supplied skill list; integration with the
+  spawn-decision component is future implementation work.
