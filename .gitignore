@@ -1,10 +1,47 @@
-# Otaman workspace marker (local pointer to otaman folder)
-.otaman
-
-# Python
 __pycache__/
-*.py[cod]
-*.egg-info/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.venv/
+venv/
 dist/
 build/
-.venv/
+*.egg-info/
+.coverage
+htmlcov/
+node_modules/
+.DS_Store
+Thumbs.db
+
+# Otaman marker file (local pointer to otaman workspace)
+.otaman
+
+# Otaman orchestration rules — written by `otaman init` to a gitignored file
+# that Claude Code auto-loads after CLAUDE.md; never committed (bus-test /
+# external-audit: keeps private fleet orchestration out of the public repo).
+CLAUDE.local.md
+
+# Otaman local env-config — MCP server wiring that assumes the internal sibling
+# repo layout (../otaman-plugin/...); regenerated per environment, never committed.
+.mcp.json
+
+# Wiki — generated output (committed only for spikes/samples)
+.otaman-wiki/
+
+# Environment and local secrets
+.env
+.env.*
+!.env.example
+*.env
+secrets.env
+*.secret
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+service-account*.json
+.maestro/
