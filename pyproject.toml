@@ -16,6 +16,7 @@ dependencies = [
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
+    "ruff==0.16.1",  # ce-lint-standard: pin exact (F182 — no CI tooling drift)
 ]
 
 [tool.hatch.build.targets.wheel]
