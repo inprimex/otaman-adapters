@@ -18,9 +18,12 @@ jobs:
     # token), so the caller must grant them explicitly here — least-privilege,
     # matching exactly what CLA Assistant needs. Without this the reusable
     # workflow fails at startup ("requesting 'X: write', only allowed 'X: none'").
+    # issues: write is required for CLA Assistant to post its sign-request
+    # comment (comment creation goes through the issues API even on PRs).
     permissions:
       actions: write
       contents: read
+      issues: write
       pull-requests: write
       statuses: write
     uses: inprimex/.github/.github/workflows/cla.yml@5c6a9d7ab58854b0dec4a650550431616e5f652f
