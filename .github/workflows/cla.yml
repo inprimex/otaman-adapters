@@ -1,7 +1,8 @@
 # CLA caller — thin wrapper; all logic lives in the shared reusable workflow.
 # Reusable workflow home: PUBLIC repo inprimex/.github (a public repo cannot
 # resolve a reusable workflow stored in a private repo, so it lives here).
-# Pinned to a full commit SHA per supply-chain doctrine (F182), not a branch.
+# Pinned to a full commit SHA (not a mutable branch) so the referenced
+# workflow cannot change unexpectedly.
 # Requires repo secret CLA_SIGNATURES_TOKEN (PAT scoped to inprimex/cla-signatures).
 name: cla
 
