@@ -3,97 +3,114 @@
 > **Otaman platform:** [otaman-core](https://github.com/inprimex/otaman-core) · [otaman-cli](https://github.com/inprimex/otaman-cli) · [otaman-plugin](https://github.com/inprimex/otaman-plugin) · [otaman-bridge](https://github.com/inprimex/otaman-bridge) · [otaman-runner](https://github.com/inprimex/otaman-runner) · **otaman-adapters (you are here)**
 
 Harness drivers for Otaman — one subpackage per supported AI coding runtime,
-translating between the Adapter Protocol and each harness's native skill
-registration and event format.
+translating between the Otaman Adapter Protocol and each harness's native skill
+registration and event format. A separate Easy8 (Redmine-core) adapter provides
+PM issue sync.
 
 ## Status
 
-More code exists here than the scaffold label suggests. The Claude Code adapter
-and OpenAI Agents SDK adapter are implemented. The Gemini adapters (CLI and
-API) are written as drafts. The harness-to-session transcript pipeline and
-approval intercept wiring do not exist yet — those depend on otaman-core
+The Claude Code adapter and OpenAI Agents SDK adapter are implemented, along
+with the Easy8 PM-sync adapter and the compliance capability model. The Gemini
+adapters (CLI and API) are drafts. The harness-to-session transcript pipeline
+and approval-intercept wiring do not exist yet — those depend on otaman-core
 interfaces that are still in design.
 
-| Adapter | State | Step |
-|---|---|---|
-| `ClaudeCodeAdapter` (skill registration) | **Implemented** | 1 |
-| `OpenAIAgentsAdapter` (skill instruction injection) | **Implemented** | 1 |
-| `GeminiCliAdapter` (skill registration) | Draft (not production-ready) | 2 |
-| `GeminiApiAdapter` (skill instruction injection) | Draft (not production-ready) | 2 |
-| `AdapterCapabilities` / `DataClassification` | **Implemented** | 1 |
-| Transcript translation (native format -> SessionEvent) | Not started | 4 |
-| Approval intercept wiring | Not started | 4 |
-| Cancellation propagation | Not started | 4 |
-| `codex-cli` adapter (v2) | Not started | 6 |
+| Component | State |
+|---|---|
+| `ClaudeCodeAdapter` (skill registration) | **Implemented** |
+| `OpenAIAgentsAdapter` (skill instruction injection) | **Implemented** |
+| `Easy8Adapter` (Redmine-core PM issue sync) | **Implemented** |
+| `AdapterCapabilities` / `DataClassification` | **Implemented** |
+| `GeminiCliAdapter` (skill registration) | Draft (not production-ready) |
+| `GeminiApiAdapter` (skill instruction injection) | Draft (not production-ready) |
+| Transcript translation (native format → `SessionEvent`) | Not started |
+| Approval-intercept wiring | Not started |
+| Cancellation propagation | Not started |
+| `codex-cli` adapter | Not started |
 
 ## What this repo owns
 
--  Protocol — the contract every runtime adapter must satisfy
--  /  — per-adapter compliance
+- `SkillAdapter` Protocol — the contract every runtime adapter satisfies
+- `AdapterCapabilities` / `DataClassification` — per-adapter compliance
   declarations consumed by otaman-router
-- **Claude Code adapter**: places each active skill's  at
-  ; injects  annotations
-  for partially-compatible skills; handles , , 
+- **Claude Code adapter**: places each active skill's `SKILL.md` at
+  `<target>/skills/<name>/SKILL.md`; injects `[CAVEAT: …]` annotations for
+  partially-compatible skills; handles `full`, `partial`, and `unsupported`
   compatibility levels
 - **OpenAI Agents SDK adapter**: skill registration via instruction injection;
-  writes  +  () to the
-  target directory for use at  construction time
+  writes `skills_block.md` + `skills_block.py` (`SKILL_INSTRUCTIONS`) to the
+  target directory for use at `Agent` construction time
+- **Easy8 (Redmine-core) PM-sync adapter**: create/update issues, add comments,
+  register webhooks, look up users, and `resolve_pm_user_id` against a
+  `human-roster`; REST client plus an optional `Easy8McpClient`
 - **Gemini CLI adapter** (draft): file-based layout identical to Claude Code;
-   reads SKILL.md natively
+  Gemini CLI reads SKILL.md natively
 - **Gemini API adapter** (draft): instruction injection identical to OpenAI
-  Agents; no native SKILL.md reader in the  SDK
-- Transcript translation (native harness format -> normalised 
-  stream) _(Step 4)_
-- Approval intercept wiring (hooks into harness approval flow) _(Step 4)_
-- Cancellation propagation _(Step 4)_
+  Agents; no native SKILL.md reader in the `google-generativeai` SDK
+- Transcript translation (native harness format → normalised `SessionEvent`
+  stream) — _planned_
+- Approval-intercept wiring (hooks into the harness approval flow) — _planned_
+- Cancellation propagation — _planned_
 
 ## What this repo does NOT own
 
-- The Adapter Protocol itself (owned by otaman-core; local copy of
-   exists here pending the core publish)
-- Routing decisions (otaman-router consults capabilities declared here)
+- The Adapter Protocol definition is shared with otaman-core; a local copy of
+  `SkillAdapter` lives here pending the core publish
+- Routing decisions (otaman-router consults the capabilities declared here)
 - Session lifecycle management (otaman-bridge)
 
-## Compliance posture per adapter
+## Compliance posture per LLM adapter
+
+Each LLM-runtime adapter declares which data-classification tiers its *default*
+backend is certified for. See [docs/adapter-compliance.md](docs/adapter-compliance.md)
+for the full rationale. (The Easy8 PM-sync adapter is not an LLM data-routing
+adapter and is not covered by this table.)
 
 | Adapter | Default clearance | PHI/REGULATED path |
 |---|---|---|
-| `claude-code` | INTERNAL, SENSITIVE | Bedrock-Anthropic + AWS BAA (EE, operator-configured) |
+| `claude-code` | INTERNAL, SENSITIVE | Bedrock-Anthropic + AWS BAA (operator-configured) |
 | `openai-agents` | INTERNAL, SENSITIVE | Azure OpenAI + Microsoft BAA (operator-configured) |
 | `gemini-cli` | INTERNAL, SENSITIVE | Google Cloud Healthcare-certified Vertex AI (operator-configured) |
 | `gemini-api` | INTERNAL, SENSITIVE | Google Cloud Healthcare-certified Vertex AI (operator-configured) |
 
-## License
-
-The Claude Code adapter is AGPL-3.0 (same as Claude Code plugin). Other
-adapters use the project's default license.
-
 ## Quick start
 
+Requires **Python 3.10+** and [`uv`](https://docs.astral.sh/uv/).
+
 ```bash
-uv pip install -e ".[dev]"
-pytest
+uv sync --extra dev               # install with dev/test extras
+uv run pytest                     # run the test suite
+uv run ruff check .               # lint  (ce-lint-standard baseline)
+uv run ruff format --check .      # format check
 ```
 
 ```python
 from pathlib import Path
-from otaman_adapters import ClaudeCodeAdapter, OpenAIAgentsAdapter
-from otaman_adapters.models import Skill
 
-# Example: register skills for Claude Code
-adapter = ClaudeCodeAdapter()
-results = adapter.register(skills, target_dir=Path(".otaman/plugin"))
+from otaman_adapters import ClaudeCodeAdapter, load_skill
+
+# Load skills from SKILL.md files, then register them for Claude Code.
+skills = [load_skill(Path("skills/my-skill/SKILL.md"))]
+results = ClaudeCodeAdapter().register(skills, target_dir=Path(".otaman/plugin"))
 ```
 
 ## Dependencies
 
 - Python >= 3.10
 - `pyyaml >= 6.0`
-- `otaman-core` (pending publish; `AdapterCapabilities` temporarily duplicated here)
+- `otaman-core` (optional at runtime; `AdapterCapabilities` /
+  `DataClassification` are duplicated locally until otaman-core publishes them)
+
+## License
+
+This repository is the Otaman **Community Edition** and is licensed under
+**AGPL-3.0-only** — see [LICENSE](LICENSE). Commercial and dual licenses are
+available from Inprimex Lab LLC: licensing@inprimex.com. Contributions are
+accepted under the Contributor License Agreement — see
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## See also
 
-- [phased-roadmap.md](https://github.com/inprimex/otaman-meta/blob/main/phased-roadmap.md) — Step 1/4/6 context
-- [polyrepo-structure.md](https://github.com/inprimex/otaman-meta/blob/main/polyrepo-structure.md) — repo ownership map
-- [ADRs](https://github.com/inprimex/otaman-meta/blob/main/adrs/) — architecture decisions
-- [otaman-meta](https://github.com/inprimex/otaman-meta) — architecture canon
+- [docs/](docs/) — adapter behavior and compliance reference
+- [CONTRIBUTING.md](CONTRIBUTING.md) — contribution workflow and CLA
+- [SECURITY.md](SECURITY.md) — reporting security vulnerabilities
