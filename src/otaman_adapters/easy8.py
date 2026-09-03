@@ -246,6 +246,12 @@ _DEFAULT_STATUS_MAP: dict[str, str] = {
     "done": "Closed",
 }
 
+# pm_sync.agent_identification modes (core owns the platform.yaml config key and
+# its default; the bridge composes the subject; the adapter only decides whether
+# to write the otaman-agent custom field). Default is "both".
+_AGENT_IDENT_MODES = ("subject-prefix", "custom-field", "both")
+_DEFAULT_AGENT_IDENT = "both"
+
 
 class Easy8Adapter(PmSyncAdapter):  # type: ignore[misc]
     """PmSyncAdapter implementation for Easy8 (Redmine-core)."""
@@ -271,6 +277,7 @@ class Easy8Adapter(PmSyncAdapter):  # type: ignore[misc]
         self._status_map: dict[str, str] = dict(_DEFAULT_STATUS_MAP)
         if status_map:
             self._status_map.update(status_map)
+        self._agent_identification: str = _DEFAULT_AGENT_IDENT
 
     # ------------------------------------------------------------------
     # Protocol: capabilities
@@ -346,7 +353,11 @@ class Easy8Adapter(PmSyncAdapter):  # type: ignore[misc]
 
     def create_issue(self, spec_change: Any) -> PmIssue:
         """Create a Redmine issue from a *SpecChange*."""
-        subject = f"[{spec_change.agent_name}] {spec_change.title}"
+        # The bridge composes the full subject (including any ``[<agent-name>]``
+        # segment) per pm_sync.agent_identification; use it verbatim so the
+        # prefix is not duplicated. agent_name is still read below for
+        # project_map resolution and the otaman-agent custom field.
+        subject = spec_change.title
 
         payload: dict[str, Any] = {"subject": subject}
         tracker_id = self._resolve_tracker_id(self._tracker_name)
@@ -367,11 +378,15 @@ class Easy8Adapter(PmSyncAdapter):  # type: ignore[misc]
             payload["description"] = spec_change.description
 
         cf_map = self._resolve_custom_field_ids()
-        _FIELD_MAP = {
+        _FIELD_MAP: dict[str, str] = {
             "jtbd-id": str(getattr(spec_change, "jtbd_id", "") or ""),
-            "otaman-agent": str(getattr(spec_change, "agent_name", "") or ""),
-            "spec-path": str(getattr(spec_change, "spec_path", "") or ""),
         }
+        # otaman-agent is written only when the mode includes the custom field
+        # (``both`` / ``custom-field``); ``subject-prefix`` omits it. Order kept
+        # (jtbd-id, otaman-agent, spec-path) so custom_field_values is stable.
+        if self._agent_identification in ("both", "custom-field"):
+            _FIELD_MAP["otaman-agent"] = str(getattr(spec_change, "agent_name", "") or "")
+        _FIELD_MAP["spec-path"] = str(getattr(spec_change, "spec_path", "") or "")
         custom_field_values: dict[str, str] = {}
         for field_name, value in _FIELD_MAP.items():
             cf_id = cf_map.get(field_name.lower())
@@ -541,6 +556,21 @@ class Easy8Adapter(PmSyncAdapter):  # type: ignore[misc]
     def set_project_map(self, project_map: dict[str, int]) -> None:
         """Inject an externally-built ``{identifier: project_id}`` mapping."""
         self._project_map.update(project_map)
+
+    def set_agent_identification(self, mode: str) -> None:
+        """Set the ``pm_sync.agent_identification`` mode passed by the bridge.
+
+        The bridge composes the full issue subject (including any
+        ``[<agent-name>]`` segment) per this mode; the adapter uses that subject
+        verbatim and only decides whether to write the ``otaman-agent`` custom
+        field. ``both`` and ``custom-field`` write the field; ``subject-prefix``
+        does not. Unknown values raise ``ValueError``.
+        """
+        if mode not in _AGENT_IDENT_MODES:
+            raise ValueError(
+                f"unknown agent_identification mode {mode!r}; expected one of {_AGENT_IDENT_MODES}"
+            )
+        self._agent_identification = mode
 
     # ------------------------------------------------------------------
     # Internal helpers

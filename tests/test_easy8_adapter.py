@@ -418,6 +418,67 @@ class TestSetProjectMap:
 
 
 # ---------------------------------------------------------------------------
+# Easy8Adapter.set_agent_identification — pm_sync.agent_identification (B5)
+# ---------------------------------------------------------------------------
+
+
+class TestAgentIdentification:
+    """The adapter uses the bridge-composed subject verbatim and only gates the
+    otaman-agent custom field on the mode: both/custom-field write it,
+    subject-prefix omits it. jtbd-id and spec-path are never gated."""
+
+    def _pre(self):
+        return [
+            _make_response({"trackers": [{"id": 1, "name": "Task"}]}),
+            _make_response({"issue_priorities": [{"id": 2, "name": "Normal"}]}),
+        ]
+
+    def _issue_resp(self):
+        return _make_response(
+            {"issue": {"id": 9, "subject": "s", "project": {"id": 1}, "status": {"name": "New"}}}
+        )
+
+    def _create(self, mode=None):
+        adapter = Easy8Adapter(
+            "https://es.example.com",
+            "k",
+            platform_custom_fields={"jtbd-id": 10, "otaman-agent": 11, "spec-path": 12},
+        )
+        if mode is not None:
+            adapter.set_agent_identification(mode)
+        with patch("urllib.request.urlopen", side_effect=self._pre() + [self._issue_resp()]) as m:
+            from otaman_adapters.easy8 import SpecChange
+
+            sc = SpecChange(title="T", agent_name="core-agent", spec_path="s/p", jtbd_id="J-1")
+            adapter.create_issue(sc)
+        return json.loads(m.call_args_list[2][0][0].data)["issue"]
+
+    def test_default_mode_writes_agent_custom_field(self):
+        # no set_agent_identification call → default "both"
+        cfv = self._create()["custom_field_values"]
+        assert cfv["11"] == "core-agent"  # otaman-agent
+        assert cfv["10"] == "J-1" and cfv["12"] == "s/p"
+
+    def test_both_mode_writes_agent_custom_field(self):
+        cfv = self._create("both")["custom_field_values"]
+        assert cfv["11"] == "core-agent"
+
+    def test_custom_field_mode_writes_agent_custom_field(self):
+        cfv = self._create("custom-field")["custom_field_values"]
+        assert cfv["11"] == "core-agent"
+
+    def test_subject_prefix_mode_omits_agent_custom_field(self):
+        cfv = self._create("subject-prefix")["custom_field_values"]
+        assert "11" not in cfv  # otaman-agent omitted
+        assert cfv["10"] == "J-1" and cfv["12"] == "s/p"  # others still written
+
+    def test_unknown_mode_raises(self):
+        adapter = Easy8Adapter("https://es.example.com", "k")
+        with pytest.raises(ValueError):
+            adapter.set_agent_identification("bogus")
+
+
+# ---------------------------------------------------------------------------
 # Easy8Adapter.create_issue — Mode C prefix + tracker_id
 # ---------------------------------------------------------------------------
 
@@ -457,21 +518,27 @@ class TestCreateIssue:
             issue_resp or self._issue_resp(),
         ]
 
-    def test_mode_c_title_prefix(self):
-        """Issue subject must start with [<agent-name>]."""
+    def test_subject_used_verbatim(self):
+        """The adapter uses spec_change.title verbatim.
+
+        The bridge composes the full ``[<change>][<agent>]`` prefix per
+        pm_sync.agent_identification, so the adapter must NOT add its own prefix
+        (doing so would duplicate the agent segment).
+        """
         adapter = Easy8Adapter("https://es.example.com", "apikey")
+        composed = "[my-change][core-agent] My issue"
         with patch(
             "urllib.request.urlopen",
-            side_effect=self._responses(self._issue_resp("[core-agent] My issue")),
+            side_effect=self._responses(self._issue_resp(composed)),
         ) as mock_open:
             from otaman_adapters.easy8 import SpecChange
 
-            sc = SpecChange(title="My issue", agent_name="core-agent")
+            sc = SpecChange(title=composed, agent_name="core-agent")
             adapter.create_issue(sc)
 
         post_req = mock_open.call_args_list[3][0][0]
         body = json.loads(post_req.data)
-        assert body["issue"]["subject"] == "[core-agent] My issue"
+        assert body["issue"]["subject"] == composed  # no doubled prefix
 
     def test_tracker_id_included_in_payload(self):
         """Issue payload must include tracker_id resolved from tracker name."""
