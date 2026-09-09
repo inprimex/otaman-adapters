@@ -9,6 +9,7 @@ Coverage:
     instead of deleting outside the skills root
 """
 
+import logging
 from pathlib import Path
 
 import pytest
@@ -187,3 +188,43 @@ class TestGeminiCliAdapterRejectsUnsafeNames:
         adapter.unregister(["../../canary"], target)
 
         assert (canary_dir / "keepme.txt").exists()
+
+
+class TestRefusalLogging:
+    """security-canon-2026-09 §1.2 clause B: every refusal reaches an
+    operator-visible log sink. Logging lives at the ``_paths`` choke point, so
+    all call sites (register, unregister's silent skip, load_skill) are covered
+    while the structured RegistrationResult is still returned to the caller."""
+
+    def test_shape_refusal_logs_warning(self, caplog):
+        with caplog.at_level(logging.WARNING, logger="otaman_adapters.paths"):
+            with pytest.raises(UnsafeSkillNameError):
+                validate_skill_name_shape("../../etc/passwd")
+        assert any(
+            r.levelno == logging.WARNING and "unsafe skill name" in r.getMessage()
+            for r in caplog.records
+        )
+
+    def test_symlink_escape_refusal_logs_warning(self, tmp_path, caplog):
+        root = tmp_path / "root"
+        root.mkdir()
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        (root / "evil").symlink_to(outside, target_is_directory=True)
+        with caplog.at_level(logging.WARNING, logger="otaman_adapters.paths"):
+            with pytest.raises(UnsafeSkillNameError):
+                safe_child_path(root, "evil")
+        assert any("escapes root" in r.getMessage() for r in caplog.records)
+
+    def test_register_refusal_logs_warning_and_returns_structured_result(self, tmp_path, caplog):
+        source = _write_skill(tmp_path / "src", "placeholder")
+        bad = _raw_skill("../../etc/evil", source)
+        with caplog.at_level(logging.WARNING, logger="otaman_adapters.paths"):
+            results = ClaudeCodeAdapter().register([bad], tmp_path / "plugin")
+        # D1 contract: BOTH the structured result (surfacing) AND the log (audit).
+        assert results[0].registered is False
+        assert "unsafe" in results[0].reason.lower()
+        assert any(
+            r.levelno == logging.WARNING and "unsafe skill name" in r.getMessage()
+            for r in caplog.records
+        )
