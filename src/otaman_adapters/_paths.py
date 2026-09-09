@@ -9,7 +9,14 @@ the intended root directory.
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
+
+# Security-relevant: every skill-name refusal is logged here, at the single
+# choke point, so it reaches an operator-visible sink regardless of which
+# caller triggered it (register, unregister's silent skip, or load_skill) —
+# the structured refusal returned to the caller is surfacing, not audit.
+_log = logging.getLogger("otaman_adapters.paths")
 
 
 class UnsafeSkillNameError(ValueError):
@@ -26,6 +33,7 @@ def validate_skill_name_shape(name: str) -> None:
     a target directory is even known.
     """
     if not name or name in (".", "..") or "/" in name or "\\" in name:
+        _log.warning("refused unsafe skill name (invalid shape): %r", name)
         raise UnsafeSkillNameError(f"unsafe skill name: {name!r}")
 
 
@@ -43,6 +51,7 @@ def safe_child_path(root: Path, name: str) -> Path:
     resolved_root = root.resolve()
     resolved_candidate = (root / name).resolve()
     if resolved_candidate != resolved_root and resolved_root not in resolved_candidate.parents:
+        _log.warning("refused unsafe skill name (escapes root %s): %r", root, name)
         raise UnsafeSkillNameError(f"unsafe skill name: {name!r}")
 
     return root / name
