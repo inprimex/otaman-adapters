@@ -43,6 +43,12 @@ uv run ruff format --check .      # format check
 - The skill-name guard in `_paths.py` is a security boundary (prevents path
   traversal during skill registration) — never bypass it, and keep its tests in
   `tests/test_path_traversal_guard.py` green.
+- Every shipped-code PR adds a customer-facing changelog fragment
+  `changelog.d/<pr>.<category>.md` (see `changelog.d/README.md`); CI blocks the
+  merge otherwise. Docs/CI/test-only PRs pass automatically, or put
+  `changelog: exempt` in the PR body. After a release cut, the
+  `fragments-consumed` bus signal names the consumed files — clear them with
+  `otaman release clear-fragments <manifest>` (never by glob).
 
 ## For AI assistants / automated contributors
 

@@ -56,13 +56,64 @@ jobs:
       - name: Import smoke test
         run: uv run python -c "import otaman_adapters"
 
+  # Changelog-fragment gate (release-notes-sibling-coverage 2.6): every
+  # shipped-code PR carries a customer-facing changelog fragment, or the release
+  # notes silently understate the release. The check is CORE-INVOKABLE — the one
+  # identical line every sibling wires (rnsc 1.3), NOT a repo-local script — so
+  # all six bundled repos gate the same way. cli's `otaman policy
+  # check-changelog` is the same logic for humans. This repo does not depend on
+  # otaman-core, so the gate runs off a plain checkout of it (stdlib-only
+  # module, PYTHONPATH is enough).
+  changelog:
+    name: changelog-fragment
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0  # gate diffs base...HEAD; default depth 1 breaks the merge-base
+
+      - name: Checkout otaman-core (gate implementation)
+        uses: actions/checkout@v7
+        with:
+          repository: inprimex/otaman-core
+          path: otaman-core
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Fetch base ref
+        run: git fetch --no-tags origin "${{ github.base_ref }}"
+
+      # PR body goes through env, never interpolated into the script: it is
+      # attacker-controllable text, and ${{ }} inside run: is substituted
+      # before the shell sees it.
+      - name: Write PR body
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: printf '%s' "$PR_BODY" > "${RUNNER_TEMP}/pr_body.txt"
+
+      - name: Changelog fragment gate
+        env:
+          PYTHONPATH: ${{ github.workspace }}/otaman-core/src
+        run: >
+          python -m otaman_core.changelog_fragment
+          --check
+          --base "origin/${{ github.base_ref }}"
+          --pr "${{ github.event.pull_request.number }}"
+          --pr-body-file "${RUNNER_TEMP}/pr_body.txt"
+
   # Aggregate gate: the single, rename-/matrix-churn-proof required check for
-  # branch protection on main (fleet-uniform). `needs: [test]` waits for every
-  # matrix leg; if any leg fails, ci-ok is skipped, which GitHub treats as
-  # not-passed — so this blocks merges correctly with plain `needs:`.
+  # branch protection on main (fleet-uniform). `needs:` waits for every matrix
+  # leg and the changelog gate; if any fails, ci-ok is skipped, which GitHub
+  # treats as not-passed — so this blocks merges correctly. `changelog` is
+  # skipped on push (PR-only), and a skipped need does not block ci-ok.
   ci-ok:
     name: ci-ok
-    needs: [test]
+    needs: [test, changelog]
     runs-on: ubuntu-latest
     steps:
       - run: echo ok
