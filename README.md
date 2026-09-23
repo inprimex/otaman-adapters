@@ -107,6 +107,10 @@ results = ClaudeCodeAdapter().register(skills, target_dir=Path(".otaman/plugin")
 - [CONTRIBUTING.md](CONTRIBUTING.md) — contribution workflow and CLA
 - [SECURITY.md](SECURITY.md) — reporting security vulnerabilities
 
+## Versioning — tags in this repo are NON-SHIPPING
+
+**Nothing installs from this repo's tags.** They are development history. The shipping version is the **otaman-deploy release**, which bundles this repo's `main` at cut time — see otaman-deploy's `RELEASING.md` for the authority chain.
+
 ## License
 
 Otaman Community Edition is free software, licensed under the **GNU Affero
