@@ -101,16 +101,22 @@ results = ClaudeCodeAdapter().register(skills, target_dir=Path(".otaman/plugin")
 - `otaman-core` (optional at runtime; `AdapterCapabilities` /
   `DataClassification` are duplicated locally until otaman-core publishes them)
 
-## License
-
-This repository is the Otaman **Community Edition** and is licensed under
-**AGPL-3.0-only** — see [LICENSE](LICENSE). Commercial and dual licenses are
-available from Inprimex Lab LLC: licensing@inprimex.com. Contributions are
-accepted under the Contributor License Agreement — see
-[CONTRIBUTING.md](CONTRIBUTING.md).
-
 ## See also
 
 - [docs/](docs/) — adapter behavior and compliance reference
 - [CONTRIBUTING.md](CONTRIBUTING.md) — contribution workflow and CLA
 - [SECURITY.md](SECURITY.md) — reporting security vulnerabilities
+
+## License
+
+Otaman Community Edition is free software, licensed under the **GNU Affero
+General Public License, version 3** (`AGPL-3.0-only`). The complete and
+controlling text is in [LICENSE](LICENSE); see [NOTICE](NOTICE) for
+attribution and licensing pointers.
+
+Commercial and dual licenses are available from Inprimex Lab LLC for those who
+do not wish to be bound by the terms of the AGPL-3.0. For commercial licensing,
+contact <licensing@inprimex.com>.
+
+Contributions are subject to the Contributor License Agreement; see
+[CONTRIBUTING.md](CONTRIBUTING.md).
