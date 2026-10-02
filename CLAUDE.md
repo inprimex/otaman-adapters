@@ -28,6 +28,7 @@ uv run ruff format --check .      # format check
 | `src/otaman_adapters/openai_agents.py` | OpenAI Agents SDK adapter — system-instruction injection |
 | `src/otaman_adapters/gemini.py` | Gemini CLI / API adapters (draft) |
 | `src/otaman_adapters/easy8.py` | Easy8 (Redmine-core) PM issue-sync adapter |
+| `src/otaman_adapters/litellm.py` | LiteLLM wire-call adapter — OpenAI-compatible chat completions for routed LLM calls (proxy / Ollama / vLLM) |
 | `src/otaman_adapters/capabilities.py` | Data-classification / compliance capability model |
 | `src/otaman_adapters/models.py` | Shared skill / result dataclasses and compatibility levels |
 | `src/otaman_adapters/_paths.py` | Path-safety helpers (skill-name traversal guard) |

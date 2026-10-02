@@ -9,6 +9,7 @@ from .easy8 import (
     resolve_pm_user_id,
 )
 from .gemini import GeminiApiAdapter, GeminiCliAdapter
+from .litellm import ChatCompletion, LiteLLMAdapter, LiteLLMError
 from .loader import load_skill
 from .models import CompatibilityLevel, RegistrationResult, Skill
 from .openai_agents import OpenAIAgentsAdapter
@@ -25,6 +26,9 @@ __all__ = [
     "OpenAIAgentsAdapter",
     "GeminiCliAdapter",
     "GeminiApiAdapter",
+    "ChatCompletion",
+    "LiteLLMAdapter",
+    "LiteLLMError",
     "Easy8Adapter",
     "Easy8McpClient",
     "EASY8_CAPABILITIES",
